@@ -1,0 +1,20 @@
+{
+  "users": {
+    "user123": {
+      "credits": 10,
+      "free_scans_today": 1,
+      "total_scans": 1,
+      "plan": "free",
+      "free_reset": 1782765592.7192352
+    }
+  },
+  "transactions": [
+    {
+      "user_id": "user123",
+      "type": "add",
+      "amount": 10,
+      "reason": "purchase",
+      "timestamp": 1782765592.7179303
+    }
+  ]
+}
