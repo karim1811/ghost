@@ -121,6 +121,7 @@
         <div class="search-box">
             <input type="text" id="target" placeholder="Username, email, or profile URL..." onkeypress="if(event.key==='Enter')startScan()">
             <button id="scanBtn" onclick="startScan()">🔍 Investigate</button>
+            <button onclick="purgeHistory()" style="background:#333; padding:15px 15px;" title="Clear history">🗑️</button>
         </div>
         <p class="url-hint">💡 Paste a Twitter/Instagram/GitHub profile URL or type a username</p>
         
@@ -273,6 +274,22 @@
             a.download = filename;
             a.target = '_blank';
             a.click();
+        }
+        
+        async function purgeHistory() {
+            if (!confirm('Clear all investigation history?')) return;
+            try {
+                const res = await fetch(`${API_URL}/purge`, { method: 'GET' });
+                const data = await res.json();
+                if (data.success) {
+                    history = [];
+                    localStorage.removeItem('ghost_history');
+                    showHistory();
+                    alert(`Cleared! Removed ${data.removed_jobs} jobs and ${data.removed_files} files.`);
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
         }
         
         function switchTab(tabName) {

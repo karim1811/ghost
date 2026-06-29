@@ -20,6 +20,7 @@ import os
 import sys
 import json
 import uuid
+import re
 import subprocess
 import time
 import threading
@@ -78,10 +79,45 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"filename": fn, "content": fp.read_text(encoding="utf-8")})
             else:
                 self._send_json({"error": "Not found"}, 404)
+        elif self.path == "/purge":
+            # Clear all completed jobs and reports
+            if not self._check_auth():
+                return self._send_json({"error": "Invalid API key"}, 401)
+            
+            # Remove old jobs
+            removed_jobs = 0
+            for jid in list(jobs.keys()):
+                job = jobs[jid]
+                if job.get("status") in ("completed", "failed", "error"):
+                    # Remove HTML file if exists
+                    html_path = job.get("html_path")
+                    if html_path:
+                        try:
+                            Path(html_path).unlink(missing_ok=True)
+                        except:
+                            pass
+                    del jobs[jid]
+                    removed_jobs += 1
+            
+            # Remove old report files
+            reports_dir = ROOT / "reports"
+            removed_files = 0
+            if reports_dir.exists():
+                for f in reports_dir.glob("*.html"):
+                    try:
+                        f.unlink()
+                        removed_files += 1
+                    except:
+                        pass
+            
+            self._send_json({
+                "success": True,
+                "removed_jobs": removed_jobs,
+                "removed_files": removed_files,
+            })
         elif self.path.startswith("/dossier/"):
             if not self._check_auth():
                 return self._send_json({"error": "Invalid API key"}, 401)
-            jid = self.path.split("/dossier/")[-1]
             if jid in jobs and jobs[jid].get("html_path"):
                 html_path = Path(jobs[jid]["html_path"])
                 if html_path.exists():
