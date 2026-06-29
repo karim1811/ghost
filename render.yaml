@@ -1,0 +1,57 @@
+# Render Blueprint for GHOST OSINT Engine
+# Deploy all services with: render blueprint apply render.yaml
+# Or deploy manually via dashboard
+
+services:
+  # ── REST API ──
+  - type: web
+    name: ghost-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python ghost-api.py
+    envVars:
+      - key: GHOST_API_KEY
+        generateValue: true
+      - key: GHOST_ENRICH_MODE
+        value: file
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FACEONLIVE_API_KEY
+        sync: false
+      - key: AZURE_FACE_API_KEY
+        sync: false
+      - key: AZURE_FACE_ENDPOINT
+        value: https://api.cognitive.microsoft.com
+      - key: DEHASHED_API_KEY
+        sync: false
+      - key: DEHASHED_EMAIL
+        sync: false
+      - key: LEAKCHECK_API_KEY
+        sync: false
+      - key: HIBP_API_KEY
+        sync: false
+
+  # ── Enrichment Server ──
+  - type: worker
+    name: ghost-enrich
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python ghost-enrich-server.py
+    envVars:
+      - key: GHOST_ENRICH_KEY
+        generateValue: true
+      - key: OPENROUTER_API_KEY
+        sync: false
+
+  # ── Telegram Bot ──
+  - type: worker
+    name: ghost-bot
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python ghost-bot.py
+    envVars:
+      - key: GHOST_BOT_TOKEN
+        sync: false
