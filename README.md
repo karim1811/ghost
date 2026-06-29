@@ -10,130 +10,196 @@
    OSINT Engine v0.2 | No One Is Invisible
 ```
 
-## 🚀 Two Modes
-
-### FREE Mode (Standalone)
-- Scan 700+ platforms for a username
-- Check email breaches (Gravatar, paste dumps)
-- Reverse image search
-- Face comparison
-- Behavioral fingerprint
-- Markdown/JSON reports
-
-### PRO Mode (AI-Enriched)
-Everything in FREE + AI-powered enrichment:
-- Identity resolution (names, locations, languages)
-- Banner/photo geolocation
-- Spotify analysis (taste, habits)
-- Twitter/X deep context (indexed tweets, interactions)
-- Social graph mapping
-- Web mentions & cached content
-- AI-generated verdict
+**GitHub:** [karim1811/ghost](https://github.com/karim1811/ghost)
 
 ---
 
-## 📦 Installation
+## 🎯 What is GHOST?
+
+GHOST (Global Heuristic OSINT Search Tool) is an AI-powered investigation engine that reveals anonymous online profiles. Scan 700+ platforms, enrich with AI (geolocation, identity resolution, social graph), and generate professional reports.
+
+**Use case:** When anonymous accounts insult/harass, show them they're NOT untraceable.
+
+---
+
+## 🚀 Quick Start
 
 ```bash
-# Clone
+# Install
 git clone https://github.com/karim1811/ghost.git
 cd ghost
+pip install -r requirements.txt
 
-# Install dependencies
-python3.13 -m pip install -r requirements.txt
-
-# Run (FREE mode)
+# Basic scan (FREE)
 python src/main.py --pseudo TARGET
+
+# Deep scan + AI enrichment (PRO)
+python src/main.py --pseudo TARGET --deep --enrich
 ```
 
 ---
 
-## 🤖 AI Enrichment Setup (PRO)
+## 📦 Components
 
-### Option A: Local Hermes Agent (Recommended for personal use)
+| Component | File | Port | Purpose |
+|-----------|------|------|---------|
+| CLI Scanner | `src/main.py` | — | Core scanning engine |
+| Dashboard | `dashboard.py` | 8501 | Web UI (Streamlit) |
+| Telegram Bot | `ghost-bot.py` | — | Remote scanning via Telegram |
+| REST API | `ghost-api.py` | 8000 | Programmatic access |
+| Enrichment Server | `ghost-enrich-server.py` | 4567 | AI backend bridge |
+| Credits System | `credits.py` | — | Monetization |
 
-1. **Install Hermes Agent:**
+---
+
+## 🖥️ Dashboard (Web UI)
+
 ```bash
-curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+streamlit run dashboard.py
+# → http://localhost:8501
 ```
 
-2. **Start the enrichment server:**
+Features:
+- Launch scans from browser
+- View reports with markdown rendering
+- Browse scan history
+- Export reports
+
+**Deploy to Streamlit Cloud (free):**
+1. Push to GitHub
+2. Go to [share.streamlit.io](https://share.streamlit.io)
+3. Connect repo → Select `dashboard.py`
+4. Deploy 🎉
+
+---
+
+## 🤖 Telegram Bot
+
 ```bash
-# In the ghost directory
-python ghost-enrich-server.py
-# → Server running on http://localhost:4567
+export GHOST_BOT_TOKEN=your-bot-token-here
+python ghost-bot.py
 ```
 
-3. **Run GHOST with enrichment:**
+Commands:
+- `/scan USERNAME` — Quick scan
+- `/deep USERNAME` — Full scan + AI enrichment
+- `/reports` — List recent reports
+- `/status` — Bot status
+
+**Get a token:** Message [@BotFather](https://t.me/BotFather) on Telegram → `/newbot`
+
+---
+
+## 🌐 REST API
+
 ```bash
-python src/main.py --pseudo TARGET --enrich
+python ghost-api.py
+# → http://localhost:8000
 ```
 
-### Option B: Remote Enrichment Server (For production/multi-user)
+### Endpoints
 
-Deploy the enrichment server to a cloud platform:
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/scan` | Start a scan |
+| `GET` | `/scan/{id}` | Check scan status |
+| `GET` | `/reports` | List all reports |
+| `GET` | `/report/{filename}` | Get report content |
+| `GET` | `/health` | Health check |
 
-#### Deploy to Railway (Easiest)
+### Example
+
 ```bash
-# Install Railway CLI
-npm i -g @railway/cli
+# Start a scan
+curl -X POST http://localhost:8000/scan \
+  -H "Content-Type: application/json" \
+  -d '{"target": "kijebede", "deep": true, "enrich": true}'
 
-# Login & init
-railway login
-railway init
+# Check status
+curl http://localhost:8000/scan/abc12345
 
-# Set env vars
-railway variables set GHOST_ENRICH_KEY=your-secret-key
-railway variables set HERMES_PATH=hermes
-
-# Deploy
-railway up
-# → You get a public URL like https://ghost-enrich.up.railway.app
-```
-
-#### Deploy to Render
-1. Connect your GitHub repo to Render
-2. Create a new Web Service
-3. Set build command: `pip install -r requirements.txt`
-4. Set start command: `python ghost-enrich-server.py`
-5. Add env var: `GHOST_ENRICH_KEY=your-secret-key`
-
-#### Deploy to Vercel (Serverless)
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel --prod
-```
-
-Then use it:
-```bash
-python src/main.py --pseudo TARGET --enrich \
-  --enrich-url https://your-server.railway.app \
-  --enrich-key your-secret-key
+# List reports
+curl http://localhost:8000/reports
 ```
 
 ---
 
-## 🔧 Usage
+## 💰 Credits System (Monetization)
 
-### FREE Mode
+| Plan | Price | Scans |
+|------|-------|-------|
+| Free | 0€ | 3/day |
+| Starter | 4.99€ | 10 scans |
+| Pro | 19.99€ | 50 scans |
+| Unlimited | 49.99€/mo | ∞ |
+
+```python
+from credits import CreditsManager
+cm = CreditsManager()
+cm.add_credits("user123", 10, "purchase")
+cm.deduct_credits("user123", deep=True)
+```
+
+---
+
+## 🏗️ Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                     GHOST v0.2 Ecosystem                  │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│  ┌─────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
+│  │Telegram │  │Dashboard │  │REST API  │  │CLI       │ │
+│  │Bot      │  │Streamlit │  │FastAPI   │  │main.py   │ │
+│  └────┬────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘ │
+│       │            │             │              │        │
+│       └────────────┴──────┬──────┴──────────────┘        │
+│                           │                              │
+│                    ┌──────┴──────┐                       │
+│                    │  Scanner    │                       │
+│                    │  Engine     │                       │
+│                    │  (69+ sites)│                       │
+│                    └──────┬──────┘                       │
+│                           │                              │
+│                    ┌──────┴──────┐                       │
+│                    │  Enrichment │                       │
+│                    │  Module     │                       │
+│                    └──────┬──────┘                       │
+│                           │                              │
+│              ┌────────────┼────────────┐                 │
+│              │            │            │                 │
+│         ┌────┴────┐  ┌────┴────┐  ┌───┴────┐           │
+│         │Hermes   │  │OpenRouter│  │Pending │           │
+│         │Agent    │  │API       │  │Files   │           │
+│         │(local)  │  │(cloud)   │  │(async) │           │
+│         └─────────┘  └─────────┘  └────────┘           │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔧 CLI Reference
+
 ```bash
 # Basic scan
-python src/main.py --pseudo username
+python src/main.py --pseudo USERNAME
 
-# Deep scan (Keybase, pastes)
-python src/main.py --pseudo username --deep
+# Deep scan (Keybase, paste dumps)
+python src/main.py --pseudo USERNAME --deep
+
+# AI enrichment
+python src/main.py --pseudo USERNAME --enrich
 
 # WhatsMyName (700+ sites)
-python src/main.py --pseudo username --whatsmyname
+python src/main.py --pseudo USERNAME --whatsmyname
 
 # Identity analysis
-python src/main.py --pseudo username --identity
+python src/main.py --pseudo USERNAME --identity
 
 # Email investigation
-python src/main.py --email test@mail.com
+python src/main.py --email EMAIL@DOMAIN.COM
 
 # Reverse image search
 python src/main.py --image photo.jpg
@@ -142,74 +208,10 @@ python src/main.py --image photo.jpg
 python src/main.py --compare photo1.jpg photo2.jpg
 
 # Export as JSON
-python src/main.py --pseudo username --export json
-```
+python src/main.py --pseudo USERNAME --export json
 
-### PRO Mode (with AI enrichment)
-```bash
-# Local enrichment
-python src/main.py --pseudo username --enrich
-
-# Remote enrichment server
-python src/main.py --pseudo username --enrich \
-  --enrich-url https://your-server.railway.app \
-  --enrich-key your-secret-key
-
-# Check server status
+# Check enrichment server
 python src/main.py --check-enrich
-python src/main.py --check-enrich --enrich-url https://your-server.railway.app
-```
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        GHOST v0.2                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────┐    ┌──────────────┐    ┌───────────────┐  │
-│  │  CLI Entry  │───▶│  Scan Engine │───▶│   Report Gen  │  │
-│  │  (main.py)  │    │ (platforms)  │    │  (markdown)   │  │
-│  └─────────────┘    └──────────────┘    └───────────────┘  │
-│         │                                        ▲          │
-│         │ --enrich                               │          │
-│         ▼                                        │          │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Enrichment Module (enrich.py)           │   │
-│  │  ┌────────────┐  ┌────────────┐  ┌──────────────┐  │   │
-│  │  │ HTTP Client│  │  Image     │  │   Report     │  │   │
-│  │  │ (requests) │  │  Analyzer  │  │   Enricher   │  │   │
-│  │  └────────────┘  └────────────┘  └──────────────┘  │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                            │                                │
-└────────────────────────────┼────────────────────────────────┘
-                             │ HTTP POST /enrich
-                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│              GHOST Enrichment Server (port 4567)            │
-│              (ghost-enrich-server.py)                        │
-│                                                             │
-│  Receives JSON ──▶ Builds prompt ──▶ Calls Hermes Agent     │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Hermes Agent (AI Backend)                 │
-│                                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
-│  │web_search│  │ browser  │  │  vision  │  │  file    │  │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘  │
-│                                                             │
-│  Capabilities:                                              │
-│  • Geolocate images        • Analyze Spotify profiles       │
-│  • Find indexed tweets     • Extract web context            │
-│  • Reverse image search    • Map social connections         │
-│  • Identity resolution     • Behavioral analysis            │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -219,73 +221,50 @@ python src/main.py --check-enrich --enrich-url https://your-server.railway.app
 ```
 ghost/
 ├── src/
-│   ├── main.py                    # CLI entry point
+│   ├── main.py                  # CLI entry point
 │   └── modules/
-│       ├── platforms.py           # 69+ platform definitions
-│       ├── http_utils.py          # HTTP helpers
-│       ├── specialized.py         # GitHub, Reddit, Steam, HN
-│       ├── leaks.py               # Gravatar, Keybase, Epieos
-│       ├── whatsmyname.py         # 700+ sites via WhatsMyName
-│       ├── reverse_image.py       # Reverse image search
-│       ├── face_compare.py        # Face comparison
-│       ├── social_graph.py        # Cross-platform identity
-│       ├── detection_patterns.py  # False positive detection
-│       ├── report.py              # Standard report generator
-│       └── enrich.py              # AI enrichment client (NEW)
-├── ghost-enrich-server.py         # Enrichment server (NEW)
+│       ├── platforms.py         # 69+ platform definitions
+│       ├── http_utils.py        # HTTP helpers
+│       ├── specialized.py       # GitHub, Reddit, Steam, HN
+│       ├── leaks.py             # Gravatar, Keybase, Epieos
+│       ├── whatsmyname.py       # 700+ sites
+│       ├── reverse_image.py     # Reverse image search
+│       ├── face_compare.py      # Face comparison
+│       ├── social_graph.py      # Cross-platform identity
+│       ├── detection_patterns.py
+│       ├── report.py            # Standard report generator
+│       └── enrich.py            # AI enrichment client
+├── dashboard.py                 # Streamlit web UI
+├── ghost-bot.py                 # Telegram bot
+├── ghost-api.py                 # REST API
+├── ghost-enrich-server.py       # Enrichment server
+├── credits.py                   # Credits/billing system
 ├── requirements.txt
-├── reports/                       # Generated reports
-└── docs/
-    └── deploy.md                  # Deployment guide
+├── reports/                     # Generated reports
+└── README.md
 ```
-
----
-
-## 🔐 Security & Privacy
-
-- **FREE mode**: Everything runs locally, no data leaves your machine
-- **PRO mode**: Scan results are sent to YOUR enrichment server only
-- **No data retention**: Enrichment server doesn't store results
-- **API key protection**: Use `--enrich-key` for production servers
-- **Rate limiting**: Built-in politeness delays on all scans
-
----
-
-## 💰 Monetization Strategy
-
-| Feature | FREE | PRO |
-|---------|------|-----|
-| Platform scan (69) | ✅ | ✅ |
-| WhatsMyName (700+) | ✅ | ✅ |
-| Email investigation | ✅ | ✅ |
-| Reverse image search | ✅ | ✅ |
-| Face comparison | ✅ | ✅ |
-| Behavioral fingerprint | ✅ | ✅ |
-| AI identity resolution | ❌ | ✅ |
-| Banner geolocation | ❌ | ✅ |
-| Spotify analysis | ❌ | ✅ |
-| Twitter deep dive | ❌ | ✅ |
-| Social graph mapping | ❌ | ✅ |
-| Web mentions | ❌ | ✅ |
-| Enriched reports | ❌ | ✅ |
-
-**Pricing suggestion:**
-- FREE: Standalone scanner
-- PRO: 4.99€/month or 49.99€/year for AI enrichment
-- API access: Pay-per-scan for third-party integrations
 
 ---
 
 ## 🛣️ Roadmap
 
 - [x] v0.1 — Basic scanner (69 platforms)
-- [x] v0.2 — AI enrichment module
-- [ ] v0.3 — Web dashboard (Streamlit)
-- [ ] v0.4 — Telegram/Discord bot
-- [ ] v0.5 — FaceOnLive integration (PimEyes-like)
-- [ ] v0.6 — Azure Face API integration
-- [ ] v0.7 — DeHashed/LeakCheck API integration
-- [ ] v0.8 — Mobile app (React Native)
+- [x] v0.2 — AI enrichment + Dashboard + Bot + API + Credits
+- [ ] v0.3 — FaceOnLive integration (PimEyes-like)
+- [ ] v0.4 — Azure Face API integration
+- [ ] v0.5 — DeHashed/LeakCheck API integration
+- [ ] v0.6 — Mobile app (React Native)
+- [ ] v0.7 — Collaborative investigations (multi-user)
+
+---
+
+## 🔐 Privacy & Ethics
+
+- Only collects publicly available data
+- No illegal access or hacking
+- Designed for deterrence, not harassment
+- Complies with GDPR (EU data protection)
+- Users responsible for lawful use
 
 ---
 
@@ -297,6 +276,6 @@ MIT License — Free for personal and commercial use.
 
 ## 👤 Author
 
-**karim1811** — OSINT enthusiast, 42 school student
+**karim1811** — OSINT enthusiast, developer
 
 GitHub: [@karim1811](https://github.com/karim1811)
