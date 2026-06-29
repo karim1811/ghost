@@ -78,6 +78,21 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 self._send_json({"filename": fn, "content": fp.read_text(encoding="utf-8")})
             else:
                 self._send_json({"error": "Not found"}, 404)
+        elif self.path.startswith("/dossier/"):
+            if not self._check_auth():
+                return self._send_json({"error": "Invalid API key"}, 401)
+            jid = self.path.split("/dossier/")[-1]
+            if jid in jobs and jobs[jid].get("html_path"):
+                html_path = Path(jobs[jid]["html_path"])
+                if html_path.exists():
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(html_path.read_bytes())
+                else:
+                    self._send_json({"error": "HTML file not found"}, 404)
+            else:
+                self._send_json({"error": "Job not found or not completed"}, 404)
         elif self.path.startswith("/scan/"):
             if not self._check_auth():
                 return self._send_json({"error": "Invalid API key"}, 401)
@@ -87,7 +102,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json({"error": "Job not found"}, 404)
         else:
-            self._send_json({"service": "GHOST API v0.2", "endpoints": ["/scan", "/scan/{id}", "/reports", "/report/{fn}", "/health"]})
+            self._send_json({"service": "GHOST API v0.3", "endpoints": ["/scan", "/scan/{id}", "/dossier", "/dossier/{id}", "/reports", "/report/{fn}", "/health"]})
 
     def do_POST(self):
         if self.path == "/scan":
@@ -156,6 +171,26 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             t.daemon = True
             t.start()
             self._send_json({"job_id": jid, "status": "running", "photos": len(photo_paths)})
+
+        elif self.path == "/dossier":
+            # Generate identity dossier (HTML report)
+            if not self._check_auth():
+                return self._send_json({"error": "Invalid API key"}, 401)
+            cl = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(cl))
+            target = body.get("target", "").strip()
+            if not target:
+                return self._send_json({"error": "No target"}, 400)
+            
+            # Run dossier generation in background
+            jid = str(uuid.uuid4())[:8]
+            job = {"id": jid, "target": target, "status": "running",
+                   "created_at": datetime.now().isoformat(), "html_path": None, "error": None}
+            jobs[jid] = job
+            t = threading.Thread(target=self._run_dossier, args=(jid, target))
+            t.daemon = True
+            t.start()
+            self._send_json({"job_id": jid, "status": "running", "target": target})
 
         else:
             self._send_json({"error": "Not found"}, 404)
@@ -253,6 +288,44 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             jobs[jid]["status"] = "completed"
             jobs[jid]["result"] = results
             jobs[jid]["completed_at"] = datetime.now().isoformat()
+        except Exception as e:
+            jobs[jid]["status"] = "failed"
+            jobs[jid]["error"] = str(e)[:500]
+
+
+    def _run_dossier(self, jid, target):
+        """Generate identity dossier for target"""
+        try:
+            sys.path.insert(0, str(SRC_DIR / "modules"))
+            from dossier import deep_scrape_profile, generate_dossier
+            
+            # Scrape all platforms
+            platforms = ["twitter", "instagram", "github", "reddit", "tiktok", "linkedin", "steam"]
+            profiles = []
+            
+            for platform in platforms:
+                try:
+                    profile = deep_scrape_profile(platform, target)
+                    if profile and not profile.get("error"):
+                        profiles.append(profile)
+                except Exception:
+                    continue
+            
+            # Generate HTML dossier
+            html = generate_dossier(target, profiles)
+            
+            # Save to file
+            dossier_dir = ROOT / "reports"
+            dossier_dir.mkdir(exist_ok=True)
+            html_path = dossier_dir / f"dossier_{target}_{int(time.time())}.html"
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            
+            jobs[jid]["status"] = "completed"
+            jobs[jid]["html_path"] = str(html_path)
+            jobs[jid]["platforms_found"] = len(profiles)
+            jobs[jid]["completed_at"] = datetime.now().isoformat()
+            
         except Exception as e:
             jobs[jid]["status"] = "failed"
             jobs[jid]["error"] = str(e)[:500]
