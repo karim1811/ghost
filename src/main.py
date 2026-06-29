@@ -23,6 +23,7 @@ from modules.http_utils import head_check, get_check, api_get, polite_request
 from modules.specialized import check_github, check_reddit, check_steam, check_hackernews
 from modules.leaks import check_gravatar, check_keybase, check_epieos, check_psbdmp
 from modules.reverse_image import run_full_reverse_search, detect_faces_in_image
+from modules.whatsmyname import check_whatsmyname
 from modules.report import generate_report
 
 
@@ -155,6 +156,10 @@ Examples:
     parser.add_argument("--category", "-c", help="Filter by category (social, coding, gaming, media, crypto, forum, pro)")
     parser.add_argument("--image", "-i", help="Path to image for reverse search (local file)")
     parser.add_argument("--image-url", help="Public URL of image for reverse search")
+    parser.add_argument("--whatsmyname", "-w", action="store_true",
+                        help="Use WhatsMyName (700+ sites, most reliable)")
+    parser.add_argument("--wm", type=int, default=None,
+                        help="Max sites to check with WhatsMyName (default: all)")
     parser.add_argument("--verbose", "-v", action="store_true")
 
     args = parser.parse_args()
@@ -187,6 +192,28 @@ Examples:
                 results.append(val)
 
         all_results.extend(results)
+
+    if args.whatsmyname:
+        target = args.pseudo or args.email
+        if target:
+            print(f"\n\n[*] WhatsMyName — checking {target} across 700+ sites...")
+            wmn_results = check_whatsmyname(target, max_sites=args.wm)
+            wmn_found = [r for r in wmn_results if r.get("exists")]
+
+            # Convert to standard format
+            for r in wmn_results:
+                r["platform"] = f"WhatsMyName | {r.get('name', '?')}"
+                r["url"] = r.get("url", "")
+
+            all_results.extend(wmn_results)
+            print(f"  WhatsMyName: {len(wmn_found)}/{len(wmn_results)} sites matched")
+
+            if wmn_found:
+                print("\n  🎯 WHATSMYNAME MATCHES:")
+                for r in wmn_found[:20]:
+                    print(f"  • [{r.get('category', '?')}] {r.get('name')}: {r.get('url')}")
+                if len(wmn_found) > 20:
+                    print(f"  ... and {len(wmn_found) - 20} more")
 
         # Console summary
         found = [r for r in results if r.get("exists")]
