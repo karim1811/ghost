@@ -294,17 +294,16 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
 
 
     def _run_dossier(self, jid, target):
-        """Generate complete identity dossier with all OSINT data"""
+        """Generate complete identity dossier — simplified for Render"""
         try:
             sys.path.insert(0, str(SRC_DIR / "modules"))
             from dossier import deep_scrape_profile, generate_dossier
-            from advanced_osint import full_investigation, reverse_image_search
-            from username_scan import run_whatsmyname
+            from advanced_osint import extract_photos_from_profile, extract_personal_info
             
-            jobs[jid]["status_message"] = "Phase 1: Scraping social media profiles..."
+            jobs[jid]["status_message"] = "Phase 1: Scraping social media..."
             
-            # Phase 1: Scrape all platforms
-            platforms = ["twitter", "instagram", "github", "reddit", "tiktok", "linkedin", "steam"]
+            # Phase 1: Scrape main platforms only (fast)
+            platforms = ["twitter", "instagram", "github", "reddit", "tiktok"]
             profiles = []
             
             for platform in platforms:
@@ -315,23 +314,52 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 except Exception:
                     continue
             
-            jobs[jid]["status_message"] = f"Phase 2: Found {len(profiles)} profiles. Running advanced OSINT..."
+            jobs[jid]["status_message"] = f"Phase 2: Extracting photos & personal info..."
             
-            # Phase 2: Advanced OSINT (Google Dorks, Wayback, Photos, Personal Info)
-            advanced = full_investigation(target, profiles)
+            # Phase 2: Extract photos and personal info (no external APIs)
+            all_photos = []
+            all_text = ""
             
-            jobs[jid]["status_message"] = "Phase 3: Searching 500+ sites with WhatsMyName..."
+            for profile in profiles:
+                platform = profile.get("platform", "").lower()
+                
+                # Extract photos
+                try:
+                    photos = extract_photos_from_profile(platform, target)
+                    all_photos.extend(photos)
+                except:
+                    pass
+                
+                # Collect text for personal info extraction
+                for key in ["bio", "recent_tweets", "recent_comments", "recent_captions"]:
+                    val = profile.get(key)
+                    if val:
+                        if isinstance(val, list):
+                            for item in val:
+                                if isinstance(item, dict):
+                                    all_text += " " + item.get("text", "")
+                                elif isinstance(item, str):
+                                    all_text += " " + item
+                        elif isinstance(val, str):
+                            all_text += " " + val
             
-            # Phase 3: WhatsMyName
-            wmn_result = run_whatsmyname(target)
-            additional_sites = wmn_result.get("sites_found", [])
+            # Extract personal info from collected text
+            personal_info = extract_personal_info(all_text)
             
-            jobs[jid]["status_message"] = "Phase 4: Generating comprehensive dossier..."
+            # Build advanced data structure
+            advanced = {
+                "photos": all_photos,
+                "personal_info": personal_info,
+                "google_dorks": {"findings": self._generate_dorks(target, profiles)},
+                "wayback": {"snapshots": []},
+            }
             
-            # Phase 4: Generate enhanced HTML dossier
-            html = generate_dossier(target, profiles, advanced, additional_sites)
+            jobs[jid]["status_message"] = "Phase 3: Generating dossier..."
             
-            # Save to file
+            # Phase 3: Generate HTML dossier
+            html = generate_dossier(target, profiles, advanced, [])
+            
+            # Save
             dossier_dir = ROOT / "reports"
             dossier_dir.mkdir(exist_ok=True)
             safe_target = re.sub(r'[^\w\-.]', '_', target)[:50]
@@ -342,14 +370,41 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             jobs[jid]["status"] = "completed"
             jobs[jid]["html_path"] = str(html_path)
             jobs[jid]["platforms_found"] = len(profiles)
-            jobs[jid]["photos_found"] = len(advanced.get("photos", []))
-            jobs[jid]["google_dorks"] = len(advanced.get("google_dorks", {}).get("findings", []))
-            jobs[jid]["wayback_snapshots"] = len(advanced.get("wayback", {}).get("snapshots", []))
+            jobs[jid]["photos_found"] = len(all_photos)
             jobs[jid]["completed_at"] = datetime.now().isoformat()
             
         except Exception as e:
             jobs[jid]["status"] = "failed"
             jobs[jid]["error"] = str(e)[:500]
+    
+    def _generate_dorks(self, target, profiles):
+        """Generate Google Dork search URLs"""
+        dorks = []
+        
+        # From found names
+        names = set()
+        for p in profiles:
+            for key in ["display_name", "full_name", "name"]:
+                if p.get(key):
+                    names.add(p[key].strip())
+        
+        dork_queries = [
+            f'"{target}" email OR email',
+            f'"{target}" phone OR telephone',
+            f'"{target}" site:linkedin.com',
+            f'"{target}" site:facebook.com',
+            f'"{target}" site:instagram.com',
+        ]
+        
+        for name in names:
+            dork_queries.append(f'"{name}" email')
+            dork_queries.append(f'"{name}" site:linkedin.com')
+        
+        for query in dork_queries[:15]:
+            search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
+            dorks.append({"query": query, "search_url": search_url})
+        
+        return dorks
 
 
 def main():
