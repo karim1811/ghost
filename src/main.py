@@ -27,6 +27,7 @@ from modules.whatsmyname import check_whatsmyname
 from modules.social_graph import analyze_github_profile, analyze_reddit_user, cross_platform_identities, generate_behavioral_fingerprint
 from modules.face_compare import compare_images, detect_face_region, batch_compare, avatar_fingerprint
 from modules.report import generate_report
+from modules.enrich import enrich_results, check_enrich_server, generate_enriched_report
 
 
 def banner():
@@ -167,8 +168,33 @@ Examples:
     parser.add_argument("--wm", type=int, default=None,
                         help="Max sites to check with WhatsMyName (default: all)")
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument("--enrich", action="store_true",
+                        help="AI enrichment: sends results to local Hermes server for deep analysis")
+    parser.add_argument("--enrich-url", default=None,
+                        help="Enrichment server URL (default: http://localhost:4567)")
+    parser.add_argument("--enrich-key", default=None,
+                        help="Enrichment API key")
+    parser.add_argument("--check-enrich", action="store_true",
+                        help="Check if enrichment server is running")
 
     args = parser.parse_args()
+
+    if args.check_enrich:
+        banner()
+        print("\n[*] Checking enrichment server...")
+        if args.enrich_url:
+            import os
+            os.environ["GHOST_ENRICH_URL"] = args.enrich_url
+        status = check_enrich_server()
+        if status["available"]:
+            print(f"  ✅ Server available (v{status.get('version', '?')})")
+            print(f"  🤖 AI Backend: {status.get('ai_backend', '?')}")
+            print(f"  📡 Capabilities: {', '.join(status.get('capabilities', []))}")
+        else:
+            print(f"  ❌ {status.get('message', 'Server not available')}")
+            print(f"\n  To start: python ghost-enrich-server.py")
+        print()
+        return
 
     if not args.pseudo and not args.email and not args.image and not args.image_url:
         banner()
@@ -417,7 +443,32 @@ Examples:
         return
 
     target = args.pseudo or args.email or (args.image or args.image_url or "target")
-    report_path = generate_report(target, all_results, report_type=args.export)
+
+    # ── AI Enrichment (optional) ──
+    if args.enrich:
+        print(f"\n[*] AI Enrichment mode activated")
+        if args.enrich_url:
+            os.environ["GHOST_ENRICH_URL"] = args.enrich_url
+        if args.enrich_key:
+            os.environ["GHOST_ENRICH_KEY"] = args.enrich_key
+
+        # Collecter les images locales (bannière, avatar)
+        local_images = []
+        if args.image and os.path.exists(args.image):
+            local_images.append(args.image)
+
+        enrich_data = enrich_results(target, all_results, mode="full", local_images=local_images)
+
+        if enrich_data.get("success"):
+            print("  ✅ Enrichment successful")
+            report_path = generate_enriched_report(target, all_results, enrich_data)
+        else:
+            print(f"  ⚠️ Enrichment failed: {enrich_data.get('error', 'unknown')}")
+            print("  → Falling back to standard report")
+            report_path = generate_report(target, all_results, report_type=args.export)
+    else:
+        report_path = generate_report(target, all_results, report_type=args.export)
+
     print(f"\n  📄 Full report: {report_path}")
     print(f"  ⏱ Total time: {time.time() - start_time:.1f}s")
 
