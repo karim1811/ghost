@@ -110,16 +110,21 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             
             photos = body.get("photos", [])
             jid = str(uuid.uuid4())[:8]
-            job = {"id": jid, "target": target, "url": url or None,
+            
+            # Sanitize target for filename use
+            import re
+            safe_target = re.sub(r'[^\w\-.]', '_', target)[:50]
+            
+            job = {"id": jid, "target": safe_target, "original_target": target, "url": url or None,
                    "status": "running",
                    "deep": body.get("deep", False), "enrich": body.get("enrich", True),
                    "photos": len(photos),
                    "created_at": datetime.now().isoformat(), "report_path": None, "error": None}
             jobs[jid] = job
-            t = threading.Thread(target=self._run, args=(jid, target, job["deep"], job["enrich"], photos, url))
+            t = threading.Thread(target=self._run, args=(jid, safe_target, job["deep"], job["enrich"], photos, url))
             t.daemon = True
             t.start()
-            self._send_json({"job_id": jid, "status": "running", "target": target})
+            self._send_json({"job_id": jid, "status": "running", "target": safe_target})
 
         elif self.path == "/face-search":
             if not self._check_auth():
