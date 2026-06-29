@@ -24,6 +24,7 @@ from modules.specialized import check_github, check_reddit, check_steam, check_h
 from modules.leaks import check_gravatar, check_keybase, check_epieos, check_psbdmp
 from modules.reverse_image import run_full_reverse_search, detect_faces_in_image
 from modules.whatsmyname import check_whatsmyname
+from modules.social_graph import analyze_github_profile, analyze_reddit_user, cross_platform_identities, generate_behavioral_fingerprint
 from modules.report import generate_report
 
 
@@ -151,6 +152,8 @@ Examples:
     parser.add_argument("--email", "-e", help="Email address to search")
     parser.add_argument("--deep", "-d", action="store_true",
                         help="Deep mode: slower but more thorough (Keybase, paste dumps)")
+    parser.add_argument("--identity", action="store_true",
+                        help="Deep identity analysis: behavioral fingerprint, cross-platform")
     parser.add_argument("--export", "-o", choices=["json", "markdown", "md"],
                         default="markdown", help="Export format (default: markdown)")
     parser.add_argument("--category", "-c", help="Filter by category (social, coding, gaming, media, crypto, forum, pro)")
@@ -215,7 +218,65 @@ Examples:
                 if len(wmn_found) > 20:
                     print(f"  ... and {len(wmn_found) - 20} more")
 
-        # Console summary
+    if args.identity and args.pseudo:
+        print(f"\n\n[*] Deep Identity Analysis for `{args.pseudo}`...")
+        print(f"{'='*60}")
+
+        # GitHub deep
+        print("\n  [+] GitHub deep analysis...")
+        gh = analyze_github_profile(args.pseudo)
+        if gh.get("data"):
+            d = gh["data"]
+            print(f"      Name: {d.get('name', '?')}")
+            print(f"      Bio: {d.get('bio', '?')}")
+            print(f"      Location: {d.get('location', '?')}")
+            print(f"      Company: {d.get('company', '?')}")
+            print(f"      Email: {d.get('email', '?')}")
+            print(f"      Twitter: {d.get('twitter', '?')}")
+            print(f"      Blog: {d.get('blog', '?')}")
+            print(f"      Languages: {list(d.get('top_languages', {}).keys())}")
+            print(f"      Timezone (from activity): {d.get('likely_timezone', '?')}")
+            if d.get("emails_from_commits"):
+                print(f"      Emails from commits: {d['emails_from_commits']}")
+        all_results.append(gh)
+
+        # Reddit deep
+        print("\n  [+] Reddit deep analysis...")
+        rd = analyze_reddit_user(args.pseudo)
+        if rd.get("data"):
+            d = rd["data"]
+            print(f"      Karma: {d.get('total_karma', '?')}")
+            print(f"      Verified email: {d.get('has_verified_email', '?')}")
+            print(f"      Top subreddits: {dict(list(d.get('active_subreddits', {}).items())[:5])}")
+        all_results.append(rd)
+
+        # Cross-platform
+        print("\n  [+] Cross-platform identity...")
+        cross = cross_platform_identities(args.pseudo)
+        for identity in cross.get("identities", []):
+            src = identity.get("source", "?")
+            print(f"      Identity from {src}:")
+            for k, v in identity.items():
+                if k != "source":
+                    print(f"        {k}: {v}")
+        all_results.append(cross)
+
+        # Behavioral fingerprint
+        fingerprint = generate_behavioral_fingerprint([gh, rd])
+        print(f"\n  🎯 BEHAVIORAL FINGERPRINT:")
+        if fingerprint["names"]:
+            print(f"      Names: {[n['value'] for n in fingerprint['names']]}")
+        if fingerprint["emails"]:
+            print(f"      Emails: {[e['value'] for e in fingerprint['emails']]}")
+        if fingerprint["locations"]:
+            print(f"      Locations: {[l['value'] for l in fingerprint['locations']]}")
+        if fingerprint["languages"]:
+            print(f"      Languages: {fingerprint['languages']}")
+        if fingerprint["connected_accounts"]:
+            print(f"      Connected: {fingerprint['connected_accounts']}")
+        all_results.append({"platform": "Behavioral Fingerprint", "data": fingerprint, "exists": True, "url": ""})
+
+    # Console summary
         found = [r for r in results if r.get("exists")]
         print(f"\n{'='*60}")
         print(f"  GHOST RESULTS for `{args.pseudo}`")

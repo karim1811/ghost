@@ -2,6 +2,7 @@
 
 import httpx
 from fake_useragent import UserAgent
+from .detection_patterns import NOT_FOUND_INDICATORS, REQUIRES_GET_CHECK
 import time
 import random
 
@@ -16,7 +17,7 @@ USER_AGENTS = [
 ]
 
 
-def get_headers():
+def get_headers(ua_override=None):
     """Return fresh headers with random UA"""
     return {
         "User-Agent": ua.random,
