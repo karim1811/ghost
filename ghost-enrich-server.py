@@ -195,57 +195,95 @@ Return ONLY valid JSON, no markdown, no explanation."""
 
     def _call_hermes(self, prompt: str, images: dict) -> dict:
         """
-        Appelle Hermes Agent en mode one-shot.
-        Utilise `hermes chat -q` pour une réponse unique.
+        Enrichment via Hermes Agent.
+        Tries OpenRouter API first (if key available), then falls back to
+        writing a pending file for the local Hermes agent to process.
         """
+        api_key = os.getenv("OPENROUTER_API_KEY")
+        if api_key:
+            result = self._call_openrouter(api_key, prompt)
+            if result:
+                return result
+
+        # Fallback: write pending file for local Hermes to process
+        return self._write_pending(prompt)
+
+    def _call_openrouter(self, api_key: str, prompt: str) -> dict:
+        """Call OpenRouter API for enrichment"""
         try:
-            # Écrire le prompt dans un fichier temporaire
-            tmp_dir = Path(__file__).parent / ".tmp"
-            tmp_dir.mkdir(exist_ok=True)
-            prompt_file = tmp_dir / "hermes_prompt.txt"
-            prompt_file.write_text(prompt, encoding="utf-8")
+            import httpx
 
-            # Appeler Hermes
-            cmd = [
-                HERMES_PATH, "chat",
-                "-q", prompt,
-                "--toolsets", "web,browser,vision,search,file",
-            ]
-
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=180,
-                cwd=str(Path(__file__).parent.parent),
+            response = httpx.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": os.getenv("GHOST_AI_MODEL", "google/gemini-2.0-flash-001"),
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You are GHOST Enrichment AI. Analyze OSINT scan results and return ONLY valid JSON with these fields: identity (likely_names, likely_location, language, interests), platform_analysis, web_context (mentions), social_graph (connections), verdict. No markdown, no explanation."
+                        },
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 4000,
+                },
+                timeout=60,
             )
 
-            if result.returncode == 0:
-                # Essayer de parser la réponse comme JSON
-                output = result.stdout.strip()
-                # Extraire le JSON du markdown si nécessaire
-                if "```json" in output:
-                    output = output.split("```json")[1].split("```")[0]
-                elif "```" in output:
-                    output = output.split("```")[1].split("```")[0]
-
+            if response.status_code == 200:
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0]
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0]
                 try:
-                    return json.loads(output)
+                    return json.loads(content.strip())
                 except json.JSONDecodeError:
-                    # Retourner la réponse brute
-                    return {"raw_analysis": output[:2000]}
-            else:
-                print(f"     Hermes error: {result.stderr[:200]}")
-                return None
-
-        except subprocess.TimeoutExpired:
-            print("     Hermes timeout")
-            return None
-        except FileNotFoundError:
-            print(f"     Hermes not found at: {HERMES_PATH}")
-            return None
+                    return {"raw_analysis": content[:3000]}
         except Exception as e:
-            print(f"     Hermes call failed: {e}")
+            print(f"     OpenRouter failed: {e}")
+        return None
+
+    def _write_pending(self, prompt: str) -> dict:
+        """
+        Writes enrichment request to pending file for local Hermes agent.
+        Returns immediately with queued status — Hermes processes it asynchronously.
+        """
+        try:
+            pending_dir = Path(__file__).parent / "pending"
+            pending_dir.mkdir(exist_ok=True)
+
+            request_id = f"ghost_{int(time.time())}"
+            pending_file = pending_dir / f"{request_id}.json"
+
+            data = {
+                "id": request_id,
+                "prompt": prompt,
+                "created_at": datetime.now().isoformat(),
+                "status": "pending",
+            }
+            pending_file.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+
+            print(f"     → Queued: {pending_file.name}")
+            print(f"     → Hermes will process it. Check: ghost --check-pending")
+
+            return {
+                "status": "queued",
+                "request_id": request_id,
+                "message": "Enrichment queued for AI processing. Hermes will analyze with web_search, browser, vision.",
+                "pending_file": str(pending_file),
+            }
+
+        except Exception as e:
+            print(f"     Write pending failed: {e}")
             return None
 
 

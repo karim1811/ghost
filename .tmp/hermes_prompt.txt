@@ -1,0 +1,22 @@
+You are GHOST Enrichment AI. Analyze these OSINT scan results and provide enrichment.
+
+TARGET: kijebede
+MODE: full
+PLATFORMS FOUND: twitter, instagram, tiktok, twitch, pinterest, odysee, snapchat, threads, parler, replit
+TOTAL PROFILES: 19
+
+SCAN RESULTS (JSON):
+[{"platform": "twitter", "type": "social", "url": "https://twitter.com/kijebede", "exists": true, "status_code": 200, "error": null, "title": "kijebede (@kijebede) / X"}, {"platform": "instagram", "type": "social", "url": "https://www.instagram.com/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Instagram"}, {"platform": "tiktok", "type": "social", "url": "https://www.tiktok.com/@kijebede", "exists": true, "status_code": 200, "error": null, "title": "TikTok - Make Your Day"}, {"platform": "twitch", "type": "social", "url": "https://www.twitch.tv/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Twitch"}, {"platform": "pinterest", "type": "social", "url": "https://www.pinterest.com/kijebede", "exists": true, "status_code": 200, "error": null, "title": ""}, {"platform": "odysee", "type": "social", "url": "https://odysee.com/@kijebede", "exists": true, "status_code": 200, "error": null, "title": "Odysee"}, {"platform": "snapchat", "type": "social", "url": "https://www.snapchat.com/add/kijebede", "exists": true, "status_code": 200, "error": null, "title": "JeromeKi (@kijebede) | Stories, Spotlight et Lenses Snapchat"}, {"platform": "threads", "type": "social", "url": "https://www.threads.net/@kijebede", "exists": true, "status_code": 200, "error": null, "title": "Threads"}, {"platform": "parler", "type": "social", "url": "https://parler.com/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Parler Social Media Platform for Creators, Communities, and Free Speech | Parler"}, {"platform": "replit", "type": "coding", "url": "https://replit.com/@kijebede", "exists": true, "status_code": 200, "error": null, "title": "Sign Up - Replit"}, {"platform": "steam_community", "type": "gaming", "url": "https://steamcommunity.com/search/UserFiles?username=kijebede", "exists": true, "status_code": 200, "error": null, "title": "Steam Community :: Search"}, {"platform": "vrchat", "type": "gaming", "url": "https://vrchat.com/home/user/kijebede", "exists": true, "status_code": 200, "error": null, "title": "VRChat - Home"}, {"platform": "spotify", "type": "media", "url": "https://open.spotify.com/user/kijebede", "exists": true, "status_code": 200, "error": null, "title": "kijebede on Spotify"}, {"platform": "etherscan", "type": "crypto", "url": "https://etherscan.io/address/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Ethereum Account (Invalid Address)"}, {"platform": "blockchain_com", "type": "crypto", "url": "https://www.blockchain.com/btc/address/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Address: 18oRBKPBQq7ET83cgHG1BNvFqUApZLvMgT"}, {"platform": "tinder", "type": "dating", "url": "https://tinder.com/@kijebede", "exists": true, "status_code": 200, "error": null, "title": "Tinder | Dating, Make Friends &amp; Meet New People"}, {"platform": "discord_lookup", "type": "discord", "url": "https://discordlookup.com/user/kijebede", "exists": true, "status_code": 200, "error": null, "title": "EasyPoll – The Most Powerful Discord Poll Bot"}, {"platform": "discord_id", "type": "discord", "url": "https://discord.com/users/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Discord"}, {"platform": "telegram", "type": "telegram", "url": "https://t.me/kijebede", "exists": true, "status_code": 200, "error": null, "title": "Telegram: Contact @kijebede"}]
+
+IMAGES ATTACHED: None
+
+Provide a JSON response with these fields:
+- "identity": {"likely_names": [...], "likely_location": "...", "language": "...", "interests": [...]}
+- "platform_analysis": {"platform_name": {"summary": "...", "extracted_data": {...}}}
+- "banner_analysis": {"location": "...", "confidence": 0-100, "details": "..."} (if banner image)
+- "reverse_image": {"matches": [...]} (if images provided)
+- "web_context": {"mentions": [...]}
+- "social_graph": {"connections": [...]}
+- "verdict": "one sentence conclusion"
+
+Return ONLY valid JSON, no markdown, no explanation.

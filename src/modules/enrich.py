@@ -8,11 +8,13 @@ import time
 import httpx
 from pathlib import Path
 from typing import Optional
+from datetime import datetime
 
 # ── Config ──────────────────────────────────────────────
 ENRICH_SERVER_URL = os.getenv("GHOST_ENRICH_URL", "http://localhost:4567")
 ENRICH_API_KEY = os.getenv("GHOST_ENRICH_KEY", "")
 ENRICH_TIMEOUT = int(os.getenv("GHOST_ENRICH_TIMEOUT", "120"))
+ENRICH_MODE = os.getenv("GHOST_ENRICH_MODE", "server")  # "server" or "webhook"
 
 
 def enrich_results(
@@ -23,6 +25,10 @@ def enrich_results(
 ) -> dict:
     """
     Envoie les résultats du scan au serveur d'enrichissement Hermes.
+    
+    Deux modes:
+    - "server": Envoie au serveur HTTP local (ghost-enrich-server.py)
+    - "file": Écrit dans pending/ pour traitement par Hermes Agent
     
     Args:
         target: pseudo ou email recherché
@@ -50,6 +56,48 @@ def enrich_results(
                     images[os.path.basename(img_path)] = base64.b64encode(f.read()).decode()
         payload["images"] = images
 
+    # Mode fichier (défaut, plus fiable)
+    if ENRICH_MODE == "file":
+        return _enrich_via_file(target, payload)
+
+    # Mode serveur HTTP
+    return _enrich_via_server(payload)
+
+
+def _enrich_via_file(target: str, payload: dict) -> dict:
+    """Écrit la requête dans un fichier pending pour traitement par Hermes"""
+    pending_dir = Path(__file__).parent.parent.parent / "pending"
+    pending_dir.mkdir(exist_ok=True)
+
+    request_id = f"ghost_{int(time.time())}"
+    pending_file = pending_dir / f"{request_id}.json"
+
+    data = {
+        "id": request_id,
+        "target": target,
+        "results": payload["results"],
+        "mode": payload["mode"],
+        "images": payload.get("images", {}),
+        "created_at": datetime.now().isoformat(),
+        "status": "pending",
+    }
+    pending_file.write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
+
+    return {
+        "success": True,
+        "status": "queued",
+        "request_id": request_id,
+        "message": f"Enrichment queued. Hermes will process: {pending_file.name}",
+        "pending_file": str(pending_file),
+        "ai_analysis": {
+            "status": "pending",
+            "raw_analysis": f"Scan results saved to {pending_file.name}. Hermes Agent will analyze with web_search, browser, vision tools.",
+        }
+    }
+
+
+def _enrich_via_server(payload: dict) -> dict:
+    """Envoie au serveur HTTP d'enrichissement"""
     headers = {"Content-Type": "application/json"}
     if ENRICH_API_KEY:
         headers["X-GHOST-KEY"] = ENRICH_API_KEY
@@ -72,7 +120,7 @@ def enrich_results(
         return {
             "success": False,
             "error": f"Cannot connect to enrichment server at {ENRICH_SERVER_URL}",
-            "fallback": "Use --no-enrich for standalone mode",
+            "fallback": "Use GHOST_ENRICH_MODE=file for local processing",
         }
     except httpx.TimeoutException:
         return {
@@ -127,19 +175,19 @@ def generate_enriched_report(target: str, scan_results: list, enrich_data: dict)
 
 **Generated:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
 **Target:** `{target}`
-**Scan:** {len(found)}/{len(results)} profiles found
-**Enrichment:** {'✅ AI-enhanced' if enrich_data.get('success') else '❌ Not enriched'}
+**Scan:** {len(found)}/{len(scan_results)} profiles found
+**Enrichment:** {'AI-enhanced' if enrich_data.get('success') else 'Not enriched'}
 
 ---
 
-## 🎯 Scan Summary
+## Scan Summary
 
 | Metric | Value |
 |---|---|
 | Platforms checked | {len(scan_results)} |
-| ✅ Found | {len(found)} |
-| ❌ Not found | {len(not_found)} |
-| ⚠️ Errors | {len(errors)} |
+| Found | {len(found)} |
+| Not found | {len(not_found)} |
+| Errors | {len(errors)} |
 
 """
 
