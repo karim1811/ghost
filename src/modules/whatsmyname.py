@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from http_utils import get_headers
+from .http_utils import get_headers
 
 WMN_DATA_PATH = Path(__file__).resolve().parent.parent.parent / "config" / "wmn-data.json"
 
