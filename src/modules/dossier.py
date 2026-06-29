@@ -630,8 +630,15 @@ def scrape_pinterest(username: str) -> dict:
 
 # ── Identity Dossier Generator ──────────────────────────
 
-def generate_dossier(username: str, profiles: list) -> str:
-    """Genere un dossier d'identite complet et consultable"""
+def generate_dossier(username: str, profiles: list, advanced: dict = None, additional_sites: list = None) -> str:
+    """Genere un dossier d'identite complet et consultable
+    
+    Args:
+        username: pseudo cible
+        profiles: liste des profils scrapes
+        advanced: resultats advanced_osint (photos, google dorks, wayback, personal_info)
+        additional_sites: sites trouves par WhatsMyName
+    """
     
     # Collecter toutes les infos
     all_names = set()
@@ -949,6 +956,149 @@ def generate_dossier(username: str, profiles: list) -> str:
             </div>"""
     
     html += """
+        </div>"""
+    
+    # ── PHOTO GALLERY ──
+    if advanced and advanced.get("photos"):
+        photos = advanced["photos"]
+        html += """
+        <div class="section">
+            <h2>📷 Photo Gallery</h2>
+            <p style="color:#888;margin-bottom:15px;">""" + str(len(photos)) + """ photos found across platforms:</p>
+            <div class="photo-gallery">"""
+        
+        for photo in photos[:20]:
+            url = photo.get("url", "")
+            source = photo.get("source", "unknown")
+            if url:
+                html += f"""
+                <div class="photo-item">
+                    <a href="{url}" target="_blank">
+                        <img src="{url}" alt="{source}" loading="lazy" onerror="this.style.display='none'">
+                    </a>
+                    <div class="platform">{source}</div>
+                    <button class="download" onclick="window.open('{url}', '_blank')">📥</button>
+                </div>"""
+        
+        html += """
+            </div>
+        </div>"""
+    
+    # ── GOOGLE DORKS ──
+    if advanced and advanced.get("google_dorks"):
+        dorks = advanced["google_dorks"].get("findings", [])
+        if dorks:
+            html += """
+            <div class="section">
+                <h2>🔍 Google Dorks</h2>
+                <p style="color:#888;margin-bottom:15px;">Click to search for leaked information:</p>"""
+            
+            for dork in dorks[:15]:
+                query = dork.get("query", "")
+                search_url = dork.get("search_url", "")
+                if query:
+                    html += f"""
+                <a href="{search_url}" target="_blank" class="profile-link">
+                    <span class="platform">🔎</span>
+                    <span class="url">{query}</span>
+                </a>"""
+            
+            html += """
+            </div>"""
+    
+    # ── WAYBACK MACHINE ──
+    if advanced and advanced.get("wayback"):
+        snapshots = advanced["wayback"].get("snapshots", [])
+        if snapshots:
+            html += """
+            <div class="section">
+                <h2>🕰️ Wayback Machine</h2>
+                <p style="color:#888;margin-bottom:15px;">""" + str(len(snapshots)) + """ historical snapshots found:</p>"""
+            
+            for snap in snapshots[:10]:
+                wayback_url = snap.get("wayback_url", "")
+                original = snap.get("original_url", "")
+                timestamp = snap.get("timestamp", "")
+                if wayback_url:
+                    html += f"""
+                <a href="{wayback_url}" target="_blank" class="profile-link">
+                    <span class="platform">{timestamp[:10] if timestamp else '?'}</span>
+                    <span class="url">{original}</span>
+                </a>"""
+            
+            html += """
+            </div>"""
+    
+    # ── PERSONAL INFO ──
+    if advanced and advanced.get("personal_info"):
+        pi = advanced["personal_info"]
+        has_personal = any(pi.get(k) for k in ["emails", "phones", "ages", "locations", "work", "school", "political_views", "personal_anecdotes"])
+        
+        if has_personal:
+            html += """
+            <div class="section">
+                <h2>🎯 Personal Information Extracted</h2>
+                <div class="info-grid">"""
+            
+            for key, label in [
+                ("emails", "Emails Found"),
+                ("phones", "Phone Numbers"),
+                ("ages", "Age Mentions"),
+                ("locations", "Locations"),
+                ("work", "Work/Job"),
+                ("school", "School/Studies"),
+                ("relationship_status", "Relationship"),
+                ("interests", "Interests"),
+                ("political_views", "Political Views"),
+            ]:
+                values = pi.get(key, [])
+                if values:
+                    if isinstance(values, list):
+                        val_str = ", ".join(str(v) for v in values[:5])
+                    else:
+                        val_str = str(values)
+                    html += f"""
+                    <div class="info-item">
+                        <div class="label">{label}</div>
+                        <div class="value">{val_str}</div>
+                    </div>"""
+            
+            html += """
+                </div>"""
+            
+            # Personal anecdotes
+            anecdotes = pi.get("personal_anecdotes", [])
+            if anecdotes:
+                html += """
+                <h3 style="margin-top:20px;">Personal Statements</h3>"""
+                for anecdote in anecdotes[:10]:
+                    html += f"""
+                <div class="quote">
+                    "{anecdote}"
+                </div>"""
+            
+            html += """
+            </div>"""
+    
+    # ── ADDITIONAL SITES (WhatsMyName) ──
+    if additional_sites:
+        html += """
+        <div class="section">
+            <h2>🌐 Additional Sites Found</h2>
+            <p style="color:#888;margin-bottom:15px;">""" + str(len(additional_sites)) + """ additional profiles found:</p>"""
+        
+        for site in additional_sites[:30]:
+            site_name = site.get("site", "?")
+            site_url = site.get("url", "")
+            category = site.get("category", "")
+            if site_url:
+                html += f"""
+            <a href="{site_url}" target="_blank" class="profile-link">
+                <span class="platform">{site_name}</span>
+                <span class="url">{category} • {site_url}</span>
+            </a>"""
+        
+        html += """
         </div>"""
     
     # Verdict

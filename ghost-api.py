@@ -294,12 +294,16 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
 
 
     def _run_dossier(self, jid, target):
-        """Generate identity dossier for target"""
+        """Generate complete identity dossier with all OSINT data"""
         try:
             sys.path.insert(0, str(SRC_DIR / "modules"))
             from dossier import deep_scrape_profile, generate_dossier
+            from advanced_osint import full_investigation, reverse_image_search
+            from username_scan import run_whatsmyname
             
-            # Scrape all platforms
+            jobs[jid]["status_message"] = "Phase 1: Scraping social media profiles..."
+            
+            # Phase 1: Scrape all platforms
             platforms = ["twitter", "instagram", "github", "reddit", "tiktok", "linkedin", "steam"]
             profiles = []
             
@@ -311,19 +315,36 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 except Exception:
                     continue
             
-            # Generate HTML dossier
-            html = generate_dossier(target, profiles)
+            jobs[jid]["status_message"] = f"Phase 2: Found {len(profiles)} profiles. Running advanced OSINT..."
+            
+            # Phase 2: Advanced OSINT (Google Dorks, Wayback, Photos, Personal Info)
+            advanced = full_investigation(target, profiles)
+            
+            jobs[jid]["status_message"] = "Phase 3: Searching 500+ sites with WhatsMyName..."
+            
+            # Phase 3: WhatsMyName
+            wmn_result = run_whatsmyname(target)
+            additional_sites = wmn_result.get("sites_found", [])
+            
+            jobs[jid]["status_message"] = "Phase 4: Generating comprehensive dossier..."
+            
+            # Phase 4: Generate enhanced HTML dossier
+            html = generate_dossier(target, profiles, advanced, additional_sites)
             
             # Save to file
             dossier_dir = ROOT / "reports"
             dossier_dir.mkdir(exist_ok=True)
-            html_path = dossier_dir / f"dossier_{target}_{int(time.time())}.html"
+            safe_target = re.sub(r'[^\w\-.]', '_', target)[:50]
+            html_path = dossier_dir / f"dossier_{safe_target}_{int(time.time())}.html"
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(html)
             
             jobs[jid]["status"] = "completed"
             jobs[jid]["html_path"] = str(html_path)
             jobs[jid]["platforms_found"] = len(profiles)
+            jobs[jid]["photos_found"] = len(advanced.get("photos", []))
+            jobs[jid]["google_dorks"] = len(advanced.get("google_dorks", {}).get("findings", []))
+            jobs[jid]["wayback_snapshots"] = len(advanced.get("wayback", {}).get("snapshots", []))
             jobs[jid]["completed_at"] = datetime.now().isoformat()
             
         except Exception as e:
