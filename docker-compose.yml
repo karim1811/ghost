@@ -1,0 +1,64 @@
+# GHOST OSINT Engine — Docker Compose
+# Usage: docker-compose up -d
+
+version: "3.8"
+
+services:
+  # ── Main Scanner + Dashboard ──
+  ghost-main:
+    build: .
+    ports:
+      - "8501:8501"   # Dashboard
+    volumes:
+      - ghost-reports:/app/reports
+      - ghost-pending:/app/pending
+    environment:
+      - GHOST_ENRICH_MODE=file
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - FACEONLIVE_API_KEY=${FACEONLIVE_API_KEY:-}
+      - AZURE_FACE_API_KEY=${AZURE_FACE_API_KEY:-}
+      - AZURE_FACE_ENDPOINT=${AZURE_FACE_ENDPOINT:-https://api.cognitive.microsoft.com}
+      - DEHASHED_API_KEY=${DEHASHED_API_KEY:-}
+      - DEHASHED_EMAIL=${DEHASHED_EMAIL:-}
+      - LEAKCHECK_API_KEY=${LEAKCHECK_API_KEY:-}
+      - HIBP_API_KEY=${HIBP_API_KEY:-}
+    restart: unless-stopped
+
+  # ── REST API ──
+  ghost-api:
+    build: .
+    command: python ghost-api.py
+    ports:
+      - "8000:8000"
+    volumes:
+      - ghost-reports:/app/reports
+    environment:
+      - GHOST_API_KEY=${GHOST_API_KEY:-}
+    restart: unless-stopped
+
+  # ── Enrichment Server ──
+  ghost-enrich:
+    build: .
+    command: python ghost-enrich-server.py
+    ports:
+      - "4567:4567"
+    volumes:
+      - ghost-pending:/app/pending
+    environment:
+      - GHOST_ENRICH_KEY=${GHOST_ENRICH_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+    restart: unless-stopped
+
+  # ── Telegram Bot (optional) ──
+  ghost-bot:
+    build: .
+    command: python ghost-bot.py
+    environment:
+      - GHOST_BOT_TOKEN=${GHOST_BOT_TOKEN:-}
+    restart: unless-stopped
+    profiles:
+      - bot  # Only start with: docker-compose --profile bot up -d
+
+volumes:
+  ghost-reports:
+  ghost-pending:
