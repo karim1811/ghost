@@ -22,6 +22,7 @@ from modules.platforms import PLATFORMS, CATEGORIES
 from modules.http_utils import head_check, get_check, api_get, polite_request
 from modules.specialized import check_github, check_reddit, check_steam, check_hackernews
 from modules.leaks import check_gravatar, check_keybase, check_epieos, check_psbdmp
+from modules.reverse_image import run_full_reverse_search, detect_faces_in_image
 from modules.report import generate_report
 
 
@@ -152,11 +153,13 @@ Examples:
     parser.add_argument("--export", "-o", choices=["json", "markdown", "md"],
                         default="markdown", help="Export format (default: markdown)")
     parser.add_argument("--category", "-c", help="Filter by category (social, coding, gaming, media, crypto, forum, pro)")
+    parser.add_argument("--image", "-i", help="Path to image for reverse search (local file)")
+    parser.add_argument("--image-url", help="Public URL of image for reverse search")
     parser.add_argument("--verbose", "-v", action="store_true")
 
     args = parser.parse_args()
 
-    if not args.pseudo and not args.email:
+    if not args.pseudo and not args.email and not args.image and not args.image_url:
         banner()
         parser.print_help()
         print()
@@ -164,6 +167,8 @@ Examples:
 
     banner()
     start_time = time.time()
+
+    all_results = []
 
     if args.pseudo:
         print(f"\n[*] Target pseudo: {args.pseudo}")
@@ -181,8 +186,7 @@ Examples:
                 val["platform"] = key.capitalize()
                 results.append(val)
 
-        # Generate report
-        report_path = generate_report(args.pseudo, results, report_type=args.export)
+        all_results.extend(results)
 
         # Console summary
         found = [r for r in results if r.get("exists")]
@@ -191,7 +195,6 @@ Examples:
         print(f"{'='*60}")
         print(f"  Profiles found: {len(found)}/{len(results)}")
         print(f"  Time: {time.time() - start_time:.1f}s")
-        print(f"  Report: {report_path}")
         print(f"{'='*60}")
 
         if found:
@@ -222,6 +225,74 @@ Examples:
         # Pastdumps
         psb = check_psbdmp(email=args.email)
         print(f"  Paste dumps: {len(psb.get('data', []))} results")
+
+        all_results.extend([grav, psb])
+
+    if args.image or args.image_url:
+        print(f"\n\n[*] Reverse Image Search")
+        print(f"{'='*60}")
+
+        report = run_full_reverse_search(
+            image_path=args.image,
+            image_url=args.image_url
+        )
+
+        report["platform"] = "Reverse Image Search"
+        report["exists"] = True
+        report["url"] = args.image or args.image_url
+
+        # Print results
+        if args.image:
+            face = report.get("face_detection", {})
+            print(f"\n  Image: {args.image}")
+            print(f"  Face detected (heuristic): {face.get('has_face', 'N/A')}")
+            print(f"  Confidence: {face.get('confidence', 0)}%")
+            if face.get("note"):
+                print(f"  Note: {face['note']}")
+
+        print("\n  🔍 SEARCH URLS (copy to browser):")
+        search_urls = report.get("search_urls", {})
+
+        if not search_urls:
+            # Try building from local
+            if args.image and os.path.exists(args.image):
+                search_urls = {
+                    "yandex": f"https://yandex.com/images/search?rpt=imageview",
+                    "google_lens": "https://lens.google.com/",
+                    "facecheck": "https://facecheck.id/",
+                    "pimeyes": "https://pimeyes.com/en",
+                }
+                print(f"\n  [!] Local file: use browser to upload image:")
+                print(f"      → Yandex: {search_urls['yandex']}")
+                print(f"      → Google Lens: {search_urls['google_lens']}")
+                print(f"      → Facecheck.id: {search_urls['facecheck']}")
+                print(f"      → PimEyes: {search_urls['pimeyes']}")
+
+                # Show face-specific engines
+                pimeyes = report.get("pimeyes", {})
+                print(f"\n  🎯 FACE SEARCH ENGINES:")
+                print(f"      • PimEyes: {pimeyes.get('website')} — {pimeyes.get('free_tier', '')}")
+
+        for engine, url in search_urls.items():
+            print(f"  → {engine}: {url}")
+
+        # Show Yandex result if available
+        ya = report.get("yandex", {})
+        if ya.get("found"):
+            print(f"\n  Yandex: {ya.get('matches', [])}")
+
+        all_results.append(report)
+
+    # ── Final report ──
+    if not all_results:
+        parser.print_help()
+        print()
+        return
+
+    target = args.pseudo or args.email or (args.image or args.image_url or "target")
+    report_path = generate_report(target, all_results, report_type=args.export)
+    print(f"\n  📄 Full report: {report_path}")
+    print(f"  ⏱ Total time: {time.time() - start_time:.1f}s")
 
 
 if __name__ == "__main__":
