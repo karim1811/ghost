@@ -26,6 +26,11 @@ from modules.reverse_image import run_full_reverse_search, detect_faces_in_image
 from modules.whatsmyname import check_whatsmyname
 from modules.social_graph import analyze_github_profile, analyze_reddit_user, cross_platform_identities, generate_behavioral_fingerprint
 from modules.face_compare import compare_images, detect_face_region, batch_compare, avatar_fingerprint
+from modules.deep_extract import (
+    extract_twitter_info, extract_instagram_info, extract_github_info,
+    extract_reddit_info, extract_tiktok_info, extract_linkedin_info,
+    extract_steam_info, correlate_identities, generate_identity_report
+)
 from modules.report import generate_report
 from modules.enrich import enrich_results, check_enrich_server, generate_enriched_report
 
