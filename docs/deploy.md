@@ -1,148 +1,198 @@
-# GHOST v0.2 — Deployment Guide
+# GHOST v0.3 — Deployment Guide
 
-## Quick Deploy Options
+## Free Deployment Options (No Railway)
 
-### 1. Local (Development)
-```bash
-pip install -r requirements.txt
-python src/main.py --pseudo TARGET --enrich
-```
+### Option 1: Render (Recommended)
 
-### 2. Docker (All-in-One)
-```bash
-docker build -t ghost-osint .
-docker run -p 8501:8501 -p 8000:8000 ghost-osint
-```
+**Best for:** API REST + Enrichment server (long-running processes)
 
-### 3. Docker Compose (Full Stack)
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-docker-compose up -d
-```
+**Free tier:** 750 instance hours/month (~31 days), spins down after 15min inactivity
 
-### 4. Cloud Platforms
+#### Deploy API on Render:
 
-#### Railway (Recommended — Free Tier)
-```bash
-# Install CLI
-npm i -g @railway/cli
+1. Go to https://render.com and sign up (GitHub login)
+2. Click **New +** → **Web Service**
+3. Connect your GitHub repo (`karim1811/ghost`)
+4. Configure:
+   - **Name:** `ghost-api`
+   - **Runtime:** Docker
+   - **Start Command:** `python ghost-api.py`
+   - **Plan:** Free
+5. Add Environment Variables:
+   - `GHOST_API_KEY` = generate with `python -c "import secrets; print(secrets.token_hex(16))"`
+   - `OPENROUTER_API_KEY` = your key (optional)
+6. Click **Create Web Service**
 
-# Login & deploy
-railway login
-railway init
-railway up
+#### Deploy Enrichment Server:
 
-# Set env vars in dashboard
-# → OPENROUTER_API_KEY, AZURE_FACE_API_KEY, etc.
-```
+Same steps but:
+- **Name:** `ghost-enrich`
+- **Start Command:** `python ghost-enrich-server.py`
 
-#### Render (Free Tier)
-1. Connect GitHub repo to Render
-2. Create Web Service:
-   - Build: `pip install -r requirements.txt`
-   - Start: `python ghost-api.py`
-3. Add env vars in dashboard
+#### Deploy Telegram Bot:
 
-#### Vercel (Serverless)
-```bash
-npm i -g vercel
-vercel --prod
-```
-
-#### Streamlit Cloud (Dashboard Only — Free)
-1. Push to GitHub
-2. Go to https://share.streamlit.io
-3. Connect repo → Select `dashboard.py`
-4. Deploy
+Same steps but:
+- **Name:** `ghost-bot`
+- **Start Command:** `python ghost-bot.py`
+- Add env: `GHOST_BOT_TOKEN`
 
 ---
 
-## API Keys Setup
+### Option 2: Hugging Face Spaces (Dashboard Only)
 
-### Free Tiers
-| Service | Free Tier | Get Key |
-|---------|----------|---------|
-| Azure Face API | 30k/mo | https://azure.microsoft.com |
-| HaveIBeenPwned | 1.5s rate limit | https://haveibeenpwned.com/API/Key |
-| OpenRouter | Pay-per-use | https://openrouter.ai/keys |
+**Best for:** Streamlit dashboard (free, always on)
 
-### Paid Services
-| Service | Price | Get Key |
-|---------|-------|---------|
-| FaceOnLive | From $0.01/search | https://faceonlive.com |
-| DeHashed | From $5/query | https://dehashed.com/api |
-| LeakCheck | From 5/mo | https://leakcheck.io |
+**Free tier:** Unlimited for public repos, always running
+
+#### Deploy Dashboard:
+
+1. Go to https://huggingface.co/spaces
+2. Click **Create new Space**
+3. Configure:
+   - **Space name:** `ghost-dashboard`
+   - **License:** MIT
+   - **SDK:** Docker
+   - **Visibility:** Public
+4. Create the space
+5. Upload these files via Git:
+   - `dashboard.py` → rename to `app.py`
+   - `requirements.txt`
+   - `src/` folder
+6. Add a `README.md` in the space with:
+   ```yaml
+   ---
+   title: GHOST Dashboard
+   emoji: 👻
+   colorFrom: red
+   colorTo: purple
+   sdk: docker
+   app_port: 8501
+   ---
+   ```
+7. The space will build and deploy automatically
+
+**Alternative:** Use Streamlit Cloud (even easier)
+1. Go to https://share.streamlit.io
+2. Sign in with GitHub
+3. Select repo → `dashboard.py`
+4. Deploy (1 click)
 
 ---
 
-## Environment Variables
+### Option 3: Vercel (API Serverless)
+
+**Best for:** REST API only (not for long scans)
+
+**Free tier:** 100GB bandwidth, 1000 invocations/day
+
+#### Deploy:
+
+1. Install Vercel CLI: `npm i -g vercel`
+2. In ghost directory: `vercel`
+3. Follow prompts (auto-detects Python)
+4. Set env vars in Vercel dashboard
+
+**Limitation:** Serverless functions timeout at 10s (free tier), so only quick scans work.
+
+---
+
+### Option 4: Clever Cloud (EU-based)
+
+**Best for:** European hosting, GDPR compliant
+
+**Free tier:** 1 service, 256MB RAM
+
+#### Deploy:
+
+1. Go to https://clever-cloud.com
+2. Create account
+3. Add GitHub integration
+4. Select repo → Docker deployment
+5. Set env vars in dashboard
+
+---
+
+### Option 5: Koyeb
+
+**Best for:** Simple Docker deployment
+
+**Free tier:** 1 nano instance (always running)
+
+#### Deploy:
+
+1. Go to https://koyeb.com
+2. Sign up with GitHub
+3. Create App → Docker
+4. Select repo → `Dockerfile`
+5. Deploy
+
+---
+
+## Comparison Table
+
+| Platform | Free Tier | Always On | Docker | Best For |
+|----------|-----------|-----------|--------|----------|
+| Render | 750h/mo | No (spins down) | Yes | API, Workers |
+| HF Spaces | Unlimited | Yes | Yes | Dashboard |
+| Streamlit Cloud | Unlimited | Yes | No | Dashboard only |
+| Vercel | 100GB/mo | Yes | No | Serverless API |
+| Clever Cloud | 1 service | Yes | Yes | EU hosting |
+| Koyeb | 1 nano | Yes | Yes | Simple apps |
+
+---
+
+## Recommended Setup
+
+For a complete free deployment:
+
+| Component | Platform | Why |
+|-----------|----------|-----|
+| Dashboard | Streamlit Cloud | Easiest, always on |
+| REST API | Render | Docker support, free tier |
+| Enrichment | Render | Same as API |
+| Telegram Bot | Render | Worker process |
+
+Total cost: **0€/month**
+
+---
+
+## Environment Variables Reference
 
 ```bash
-# AI Enrichment
-OPENROUTER_API_KEY=sk-or-xxx...
+# Required for production
+GHOST_API_KEY=genera...  # API auth key
+GHOST_ENRICH_KEY=xxx...  # Enrichment server auth
 
-# Face Recognition
-FACEONLIVE_API_KEY=xxx...
-AZURE_FACE_API_KEY=xxx...
-AZURE_FACE_ENDPOINT=https://xxx.cognitiveservices.azure.com
+# AI Enrichment (optional)
+OPENROUTER_API_KEY=***  # Pay-per-use AI
 
-# Breach Search
-HIBP_API_KEY=xxx...
-DEHASHED_API_KEY=xxx...
+# Face Recognition (optional)
+FACEONLIVE_API_KEY=xxx......n
+AZURE_FACE_API_KEY=xxx......n
+
+# Breach Search (optional)
+HIBP_API_KEY=xxx......n
+DEHASHED_API_KEY=xxx......n
 DEHASHED_EMAIL=your@email.com
-LEAKCHECK_API_KEY=xxx...
+LEAKCHECK_API_KEY=xxx......n
 
-# Telegram
-GHOST_BOT_TOKEN=123456:ABC...
+# Telegram (optional)
+GHOST_BOT_TOKEN=123456...:ABC...
 
-# Security
-GHOST_API_KEY=generate-random-hex
-GHOST_ENRICH_KEY=generate-random-hex
+# Credits
+GHOST_CREDITS_PER_SCAN=1
+GHOST_CREDITS_PER_DEEP=3
+GHOST_FREE_DAILY_SCANS=3
 ```
 
 ---
 
-## Production Checklist
+## Post-Deployment Checklist
 
-- [ ] Set strong API keys (GHOST_API_KEY, GHOST_ENRICH_KEY)
-- [ ] Use HTTPS (reverse proxy with nginx/caddy)
-- [ ] Set up rate limiting
-- [ ] Configure log rotation
-- [ ] Set up monitoring (UptimeRobot, etc.)
-- [ ] Back up reports/ directory
-- [ ] Set up Stripe for payments (credits system)
-- [ ] Configure CORS for API
-- [ ] Set up error tracking (Sentry)
-
----
-
-## Architecture for Production
-
-```
-                    ┌─────────────┐
-                    │   Users     │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴────┐ ┌────┴────┐
-        │ Dashboard │ │Telegram│ │ REST API│
-        │ Streamlit │ │  Bot   │ │ FastAPI │
-        └─────┬─────┘ └───┬────┘ └────┬────┘
-              │            │            │
-              └────────────┼────────────┘
-                           │
-                    ┌──────┴──────┐
-                    │   Scanner   │
-                    │   Engine    │
-                    └──────┬──────┘
-                           │
-              ┌────────────┼────────────┐
-              │            │            │
-        ┌─────┴─────┐ ┌───┴────┐ ┌────┴────┐
-        │ Face APIs │ │ Breach │ │   AI    │
-        │ Azure/Face│ │ Search │ │Enrich   │
-        │ OnLive    │ │DeHashed│ │OpenRoutr│
-        └───────────┘ └────────┘ └─────────┘
-```
+- [ ] Set strong API keys
+- [ ] Test endpoints with curl
+- [ ] Configure CORS if needed
+- [ ] Set up uptime monitoring (UptimeRobot — free)
+- [ ] Enable HTTPS (automatic on all platforms)
+- [ ] Set up log alerts
+- [ ] Back up reports/ periodically
