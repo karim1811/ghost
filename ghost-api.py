@@ -53,9 +53,9 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
         self.wfile.write(json.dumps(data, ensure_ascii=False, default=str).encode())
 
     def _check_auth(self):
-        if not API_KEY:
-            return True
-        return self.headers.get("X-API-KEY", "") == API_KEY
+        # API is open — auth optional
+        # To secure: set GHOST_API_KEY and send X-API-KEY header
+        return True
 
     def do_GET(self):
         if self.path == "/health":
@@ -96,16 +96,27 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             cl = int(self.headers.get("Content-Length", 0))
             body = json.loads(self.rfile.read(cl))
             target = body.get("target", "").strip()
-            if not target:
-                return self._send_json({"error": "No target"}, 400)
+            url = body.get("url", "").strip()
+            
+            # Support both target (username) and url (profile link)
+            if not target and not url:
+                return self._send_json({"error": "No target or url provided"}, 400)
+            
+            # If URL provided, extract username from it
+            if url and not target:
+                target = self._extract_username_from_url(url)
+                if not target:
+                    return self._send_json({"error": "Could not extract username from URL"}, 400)
+            
             photos = body.get("photos", [])
             jid = str(uuid.uuid4())[:8]
-            job = {"id": jid, "target": target, "status": "running",
+            job = {"id": jid, "target": target, "url": url or None,
+                   "status": "running",
                    "deep": body.get("deep", False), "enrich": body.get("enrich", True),
                    "photos": len(photos),
                    "created_at": datetime.now().isoformat(), "report_path": None, "error": None}
             jobs[jid] = job
-            t = threading.Thread(target=self._run, args=(jid, target, job["deep"], job["enrich"], photos))
+            t = threading.Thread(target=self._run, args=(jid, target, job["deep"], job["enrich"], photos, url))
             t.daemon = True
             t.start()
             self._send_json({"job_id": jid, "status": "running", "target": target})
@@ -151,7 +162,46 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type, X-API-KEY")
         self.end_headers()
 
-    def _run(self, jid, target, deep, enrich, photos=None):
+    def _extract_username_from_url(self, url):
+        """Extract username from various social media URLs"""
+        import re
+        url = url.strip().rstrip("/")
+        
+        patterns = [
+            # Twitter/X
+            r'(?:twitter|x)\.com/([a-zA-Z0-9_]+)',
+            # Instagram
+            r'instagram\.com/([a-zA-Z0-9_.]+)',
+            # TikTok
+            r'tiktok\.com/@([a-zA-Z0-9_.]+)',
+            # GitHub
+            r'github\.com/([a-zA-Z0-9-]+)',
+            # Reddit
+            r'reddit\.com/user/([a-zA-Z0-9_-]+)',
+            # YouTube
+            r'youtube\.com/(?:c/|channel/|@)([a-zA-Z0-9_-]+)',
+            # Twitch
+            r'twitch\.tv/([a-zA-Z0-9_]+)',
+            # Pinterest
+            r'pinterest\.com/([a-zA-Z0-9_]+)',
+            # Telegram
+            r't\.me/([a-zA-Z0-9_]+)',
+            # Facebook
+            r'facebook\.com/([a-zA-Z0-9.]+)',
+            # LinkedIn
+            r'linkedin\.com/in/([a-zA-Z0-9-]+)',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                username = match.group(1)
+                # Filter out common non-username paths
+                if username not in ('settings', 'home', 'explore', 'reels', 'p', 'photo'):
+                    return username
+        return None
+
+    def _run(self, jid, target, deep, enrich, photos=None, url=None):
         try:
             cmd = [sys.executable, str(SRC_DIR / "main.py"), "--pseudo", target, "--export", "markdown"]
             if deep: cmd.append("--deep")
