@@ -25,6 +25,7 @@ from modules.leaks import check_gravatar, check_keybase, check_epieos, check_psb
 from modules.reverse_image import run_full_reverse_search, detect_faces_in_image
 from modules.whatsmyname import check_whatsmyname
 from modules.social_graph import analyze_github_profile, analyze_reddit_user, cross_platform_identities, generate_behavioral_fingerprint
+from modules.face_compare import compare_images, detect_face_region, batch_compare, avatar_fingerprint
 from modules.report import generate_report
 
 
@@ -159,6 +160,8 @@ Examples:
     parser.add_argument("--category", "-c", help="Filter by category (social, coding, gaming, media, crypto, forum, pro)")
     parser.add_argument("--image", "-i", help="Path to image for reverse search (local file)")
     parser.add_argument("--image-url", help="Public URL of image for reverse search")
+    parser.add_argument("--compare", nargs="+", help="Compare 2+ images for same person")
+    parser.add_argument("--avatar", help="Analyze an avatar/profile pic fingerprint")
     parser.add_argument("--whatsmyname", "-w", action="store_true",
                         help="Use WhatsMyName (700+ sites, most reliable)")
     parser.add_argument("--wm", type=int, default=None,
@@ -370,6 +373,42 @@ Examples:
             print(f"\n  Yandex: {ya.get('matches', [])}")
 
         all_results.append(report)
+
+    # ── Face comparison ──
+    if args.compare:
+        print(f"\n\n[*] Face Comparison — {len(args.compare)} images")
+        print(f"{'='*60}")
+
+        for img in args.compare:
+            if not os.path.exists(img):
+                print(f"  ✗ {img} not found")
+                continue
+            face_info = detect_face_region(img)
+            print(f"\n  📸 {img}:")
+            print(f"      Size: {face_info.get('size')}")
+            print(f"      Has face: {face_info.get('has_face')} ({face_info.get('skin_ratio', 0)*100:.1f}%)")
+
+        if len(args.compare) >= 2:
+            print(f"\n  🔬 Comparing...")
+            result = batch_compare(args.compare)
+            for comp in result.get("comparisons", []):
+                sim = comp.get("similarity", 0)
+                same = "SAME" if comp.get("same_person") else "DIFFERENT"
+                print(f"  • {os.path.basename(comp['image1'])} vs {os.path.basename(comp['image2'])}: {sim}% — {same}")
+            print(f"\n  🎯 Conclusion: {result.get('conclusion', '?')}")
+
+    # ── Avatar fingerprint ──
+    if args.avatar:
+        if not os.path.exists(args.avatar):
+            print(f"  ✗ {args.avatar} not found")
+        else:
+            print(f"\n[*] Avatar Fingerprint — {args.avatar}")
+            print(f"{'='*60}")
+            fp = avatar_fingerprint(args.avatar)
+            print(f"  Size: {fp.get('fingerprint', {}).get('size')}")
+            print(f"  Is avatar: {fp.get('is_avatar')}")
+            print(f"  Mean color: {fp.get('fingerprint', {}).get('mean_color')}")
+            print(f"  Hash: {fp.get('fingerprint', {}).get('hash')}")
 
     # ── Final report ──
     if not all_results:
