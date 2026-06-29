@@ -29,7 +29,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 
 HOST = os.getenv("GHOST_API_HOST", "0.0.0.0")
 PORT = int(os.getenv("GHOST_API_PORT", "8000"))
-API_KEY = os.getenv("GHOST_API_KEY", "")
+_API_KEY_ENV = "GHOST_API_KEY"
+API_KEY = os.getenv(_API_KEY_ENV, "")
+_ENRICH_URL_DEFAULT = "http://localhost:4567"
+ENRICH_URL = os.getenv("GHOST_ENRICH_URL", _ENRICH_URL_DEFAULT)
 
 ROOT = Path(__file__).parent
 SRC_DIR = ROOT / "src"
