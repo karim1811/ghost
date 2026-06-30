@@ -161,21 +161,43 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             
             photos = body.get("photos", [])
             jid = str(uuid.uuid4())[:8]
-            
-            # Sanitize target for filename use
-            import re
-            safe_target = re.sub(r'[^\w\-.]', '_', target)[:50]
-            
-            job = {"id": jid, "target": safe_target, "original_target": target, "url": url or None,
+            job = {"id": jid, "target": target, "url": url or None,
                    "status": "running",
                    "deep": body.get("deep", False), "enrich": body.get("enrich", True),
                    "photos": len(photos),
                    "created_at": datetime.now().isoformat(), "report_path": None, "error": None}
             jobs[jid] = job
-            t = threading.Thread(target=self._run, args=(jid, safe_target, job["deep"], job["enrich"], photos, url))
+            t = threading.Thread(target=self._run, args=(jid, target, job["deep"], job["enrich"], photos, url))
             t.daemon = True
             t.start()
-            self._send_json({"job_id": jid, "status": "running", "target": safe_target})
+            self._send_json({"job_id": jid, "status": "running", "target": target})
+
+        elif self.path == "/dossier":
+            # Generate full identity dossier
+            if not self._check_auth():
+                return self._send_json({"error": "Invalid API key"}, 401)
+            cl = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(cl))
+            target = body.get("target", "").strip()
+            url = body.get("url", "").strip()
+            
+            # Support both target and url
+            if not target and not url:
+                return self._send_json({"error": "No target or url provided"}, 400)
+            
+            if url and not target:
+                target = self._extract_username_from_url(url)
+                if not target:
+                    return self._send_json({"error": "Could not extract username from URL"}, 400)
+            
+            jid = str(uuid.uuid4())[:8]
+            job = {"id": jid, "target": target, "status": "running",
+                   "created_at": datetime.now().isoformat(), "html_path": None, "error": None}
+            jobs[jid] = job
+            t = threading.Thread(target=self._run_dossier, args=(jid, target))
+            t.daemon = True
+            t.start()
+            self._send_json({"job_id": jid, "status": "running", "target": target})
 
         elif self.path == "/face-search":
             if not self._check_auth():
