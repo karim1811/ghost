@@ -116,19 +116,22 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 "removed_files": removed_files,
             })
         elif self.path.startswith("/dossier/"):
-            if not self._check_auth():
-                return self._send_json({"error": "Invalid API key"}, 401)
-            if jid in jobs and jobs[jid].get("html_path"):
-                html_path = Path(jobs[jid]["html_path"])
-                if html_path.exists():
+            # Return HTML dossier directly (no file storage on Render)
+            jid = self.path.split("/dossier/")[-1]
+            if jid in jobs:
+                job = jobs[jid]
+                if job.get("status") == "completed" and job.get("html_content"):
                     self.send_response(200)
                     self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Access-Control-Allow-Origin", "*")
                     self.end_headers()
-                    self.wfile.write(html_path.read_bytes())
+                    self.wfile.write(job["html_content"].encode("utf-8"))
+                elif job.get("status") == "failed":
+                    self._send_json({"error": job.get("error", "Dossier generation failed")}, 500)
                 else:
-                    self._send_json({"error": "HTML file not found"}, 404)
+                    self._send_json({"status": job.get("status"), "message": job.get("status_message", "Processing...")}, 202)
             else:
-                self._send_json({"error": "Job not found or not completed"}, 404)
+                self._send_json({"error": "Job not found"}, 404)
         elif self.path.startswith("/scan/"):
             if not self._check_auth():
                 return self._send_json({"error": "Invalid API key"}, 401)
@@ -414,19 +417,12 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             
             jobs[jid]["status_message"] = "Phase 3: Generating dossier..."
             
-            # Phase 3: Generate HTML dossier
+            # Generate HTML dossier
             html = generate_dossier(target, profiles, advanced, [])
             
-            # Save
-            dossier_dir = ROOT / "reports"
-            dossier_dir.mkdir(exist_ok=True)
-            safe_target = re.sub(r'[^\w\-.]', '_', target)[:50]
-            html_path = dossier_dir / f"dossier_{safe_target}_{int(time.time())}.html"
-            with open(html_path, "w", encoding="utf-8") as f:
-                f.write(html)
-            
+            # Store HTML in memory (Render has no persistent storage)
             jobs[jid]["status"] = "completed"
-            jobs[jid]["html_path"] = str(html_path)
+            jobs[jid]["html_content"] = html
             jobs[jid]["platforms_found"] = len(profiles)
             jobs[jid]["photos_found"] = len(all_photos)
             jobs[jid]["completed_at"] = datetime.now().isoformat()
