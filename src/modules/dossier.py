@@ -720,13 +720,31 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
                 personal_quotes.append(("Instagram", caption))
     
     # Calculer score anonymat
+    # PRINCIPE GHOST: trouver le pseudo quelque part = deja pas anonyme.
+    # Le score baisse meme si on ne recupere QUE le profil (URL), pas que le nom/email.
+    n_profiles = len([p for p in profiles if p])
+    n_additional = len(additional_sites) if additional_sites else 0
+    n_photos = len(advanced.get("photos", [])) if advanced else 0
+    n_dorks = len(advanced.get("google_dorks", {}).get("findings", [])) if advanced else 0
+
     anonymity_score = 100
-    if all_names: anonymity_score -= 25
-    if all_emails: anonymity_score -= 25
-    if all_locations: anonymity_score -= 20
-    if all_companies: anonymity_score -= 15
+    # Presence du pseudo sur des plateformes = trace directe (le coeur de GHOST)
+    if n_profiles or n_additional:
+        anonymity_score -= 30
+    if n_profiles >= 3 or n_additional >= 10:
+        anonymity_score -= 20
+    if n_profiles >= 5 or n_additional >= 20:
+        anonymity_score -= 15
+    # Identifiants personnels extraits
+    if all_names: anonymity_score -= 20
+    if all_emails: anonymity_score -= 20
+    if all_locations: anonymity_score -= 15
+    if all_companies: anonymity_score -= 10
     if political_views: anonymity_score -= 10
     if personal_quotes: anonymity_score -= 5
+    # Preuves visuelles / recherche
+    if n_photos: anonymity_score -= 10
+    if n_dorks: anonymity_score -= 5
     anonymity_score = max(0, anonymity_score)
     
     # Generer le dossier HTML
@@ -1102,12 +1120,13 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
         </div>"""
     
     # Verdict
+    total_traces = n_profiles + n_additional
     if anonymity_score < 40:
-        verdict_text = "This person is NOT anonymous. Multiple personal identifiers were found. Real name, location, work, emails, and opinions are all exposed."
+        verdict_text = f"This person is NOT anonymous. {total_traces} platform traces found. Real name, location, work, emails, and opinions are exposed across the web."
     elif anonymity_score < 70:
-        verdict_text = "Partial anonymity. Some personal info was found. With more investigation, full identity could be revealed."
+        verdict_text = f"Partial anonymity. {total_traces} traces found. Some personal info was recovered. With more investigation, full identity can be revealed."
     else:
-        verdict_text = "Good anonymity practices detected. Limited personal info found."
+        verdict_text = "Good anonymity practices detected. Limited traces found on the scraped platforms."
     
     html += f"""
         <div class="verdict">

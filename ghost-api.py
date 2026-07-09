@@ -361,12 +361,12 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             from dossier import deep_scrape_profile, generate_dossier
             from advanced_osint import extract_photos_from_profile, extract_personal_info
             
-            jobs[jid]["status_message"] = "Phase 1: Scraping social media..."
-            
-            # Phase 1: Scrape main platforms only (fast)
+            jobs[jid]["status_message"] = "Phase 1: Scanning social media + 700+ sites..."
+
+            # Phase 1: Scrape main platforms (fast)
             platforms = ["twitter", "instagram", "github", "reddit", "tiktok"]
             profiles = []
-            
+
             for platform in platforms:
                 try:
                     profile = deep_scrape_profile(platform, target)
@@ -374,6 +374,19 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                         profiles.append(profile)
                 except Exception:
                     continue
+
+            # Phase 1b: WhatsMyName — 700+ sites (THE core of GHOST)
+            additional_sites = []
+            try:
+                from whatsmyname import check_whatsmyname
+                wmn_results = check_whatsmyname(target, max_sites=100)
+                additional_sites = [
+                    {"site": r.get("name", "?"), "url": r.get("url", ""), "category": r.get("category", "")}
+                    for r in wmn_results if r.get("exists")
+                ]
+                jobs[jid]["wmn_found"] = len(additional_sites)
+            except Exception as e:
+                jobs[jid]["wmn_error"] = str(e)[:200]
             
             jobs[jid]["status_message"] = f"Phase 2: Extracting photos & personal info..."
             
@@ -418,7 +431,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             jobs[jid]["status_message"] = "Phase 3: Generating dossier..."
             
             # Generate HTML dossier
-            html = generate_dossier(target, profiles, advanced, [])
+            html = generate_dossier(target, profiles, advanced, additional_sites)
             
             # Store HTML in memory (Render has no persistent storage)
             jobs[jid]["status"] = "completed"
