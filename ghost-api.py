@@ -41,6 +41,37 @@ REPORTS_DIR = ROOT / "src" / "reports"
 jobs = {}
 
 
+def _load_ghost_module(modname):
+    """Load a module from src/modules as a package submodule so its
+    relative imports (from .http_utils import ...) resolve correctly."""
+    import types
+    import importlib.util
+    mods_dir = str(SRC_DIR / "modules")
+    pkg_name = "ghostmods"
+    if pkg_name not in sys.modules:
+        pkg = types.ModuleType(pkg_name)
+        pkg.__path__ = [mods_dir]
+        sys.modules[pkg_name] = pkg
+        # register http_utils/detection_patterns as package siblings
+        for dep in ("http_utils", "detection_patterns"):
+            spec = importlib.util.spec_from_file_location(
+                f"{pkg_name}.{dep}", f"{mods_dir}/{dep}.py")
+            m = importlib.util.module_from_spec(spec)
+            sys.modules[f"{pkg_name}.{dep}"] = m
+            try:
+                spec.loader.exec_module(m)
+            except Exception:
+                pass
+    if modname in sys.modules:
+        return sys.modules[f"{pkg_name}.{modname}"]
+    spec = importlib.util.spec_from_file_location(
+        f"{pkg_name}.{modname}", f"{mods_dir}/{modname}.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[f"{pkg_name}.{modname}"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
 class GhostAPIHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -378,8 +409,8 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             # Phase 1b: WhatsMyName — 700+ sites (THE core of GHOST)
             additional_sites = []
             try:
-                from whatsmyname import check_whatsmyname
-                wmn_results = check_whatsmyname(target, max_sites=100)
+                whatsmyname = _load_ghost_module("whatsmyname")
+                wmn_results = whatsmyname.check_whatsmyname(target, max_sites=100)
                 additional_sites = [
                     {"site": r.get("name", "?"), "url": r.get("url", ""), "category": r.get("category", "")}
                     for r in wmn_results if r.get("exists")
