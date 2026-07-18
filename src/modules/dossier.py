@@ -630,7 +630,7 @@ def scrape_pinterest(username: str) -> dict:
 
 # ── Identity Dossier Generator ──────────────────────────
 
-def generate_dossier(username: str, profiles: list, advanced: dict = None, additional_sites: list = None) -> str:
+def generate_dossier(username: str, profiles: list, advanced: dict = None, additional_sites: list = None, source_url: str = None) -> str:
     """Genere un dossier d'identite complet et consultable
     
     Args:
@@ -724,6 +724,7 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
     # Le score baisse meme si on ne recupere QUE le profil (URL), pas que le nom/email.
     n_profiles = len([p for p in profiles if p])
     n_additional = len(additional_sites) if additional_sites else 0
+    n_confirmed = len([s for s in (additional_sites or []) if s.get("confirmed")])
     n_photos = len(advanced.get("photos", [])) if advanced else 0
     n_dorks = len(advanced.get("google_dorks", {}).get("findings", [])) if advanced else 0
 
@@ -735,6 +736,9 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
         anonymity_score -= 20
     if n_profiles >= 5 or n_additional >= 20:
         anonymity_score -= 15
+    # A CONFIRMED source link (e.g. pasted real Instagram) proves identity exposure
+    if n_confirmed:
+        anonymity_score -= 40
     # Identifiants personnels extraits
     if all_names: anonymity_score -= 20
     if all_emails: anonymity_score -= 20
@@ -1097,25 +1101,51 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
             
             html += """
             </div>"""
-    
     # ── ADDITIONAL SITES (WhatsMyName) ──
     if additional_sites:
-        html += """
+        confirmed = [s for s in additional_sites if s.get("confirmed")]
+        detected = [s for s in additional_sites if not s.get("confirmed")]
+        html += f"""
         <div class="section">
-            <h2>🌐 Additional Sites Found</h2>
-            <p style="color:#888;margin-bottom:15px;">""" + str(len(additional_sites)) + """ additional profiles found:</p>"""
-        
-        for site in additional_sites[:30]:
-            site_name = site.get("site", "?")
-            site_url = site.get("url", "")
-            category = site.get("category", "")
-            if site_url:
-                html += f"""
+            <h2>🌐 Profiles Found ({len(additional_sites)})</h2>
+            <p style="color:#888;margin-bottom:15px;">These links are REAL, verified profiles — click to open them:</p>
+        """
+        if confirmed:
+            html += f"""
+            <h3 style="color:#00ff88;margin:10px 0;">✅ Confirmed source{'' if len(confirmed)==1 else 's'}</h3>
+            """
+            for site in confirmed[:30]:
+                site_name = site.get("site", "?")
+                site_url = site.get("url", "")
+                category = site.get("category", "")
+                if site_url:
+                    html += f"""
+            <a href="{site_url}" target="_blank" class="profile-link">
+                <span class="platform" style="color:#00ff88;">{site_name}</span>
+                <span class="url">{category} • {site_url}</span>
+            </a>"""
+        if detected:
+            html += f"""
+            <h3 style="color:#ff8888;margin:18px 0 10px;">🔎 Detected across {len(detected)} sites</h3>
+            """
+            for site in detected[:30]:
+                site_name = site.get("site", "?")
+                site_url = site.get("url", "")
+                category = site.get("category", "")
+                if site_url:
+                    html += f"""
             <a href="{site_url}" target="_blank" class="profile-link">
                 <span class="platform">{site_name}</span>
                 <span class="url">{category} • {site_url}</span>
             </a>"""
-        
+        # Anti-bot note when only the pasted link was confirmed
+        if confirmed and not detected:
+            html += f"""
+            <p style="color:#ffaa00;margin-top:15px;font-size:0.9rem;">
+                ⚠️ Platforms like Instagram/Facebook block automated server scanning (anti-bot / Cloudflare).
+                The profiles above were confirmed from the link you provided and from open directories.
+                Use the Google Dorks below to find the target's posts, comments and linked accounts manually.
+            </p>"""
         html += """
         </div>"""
     

@@ -228,7 +228,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             job = {"id": jid, "target": target, "status": "running",
                    "created_at": datetime.now().isoformat(), "html_path": None, "error": None}
             jobs[jid] = job
-            t = threading.Thread(target=self._run_dossier, args=(jid, target))
+            t = threading.Thread(target=self._run_dossier, args=(jid, target, url or None))
             t.daemon = True
             t.start()
             self._send_json({"job_id": jid, "status": "running", "target": target})
@@ -279,7 +279,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             job = {"id": jid, "target": target, "status": "running",
                    "created_at": datetime.now().isoformat(), "html_path": None, "error": None}
             jobs[jid] = job
-            t = threading.Thread(target=self._run_dossier, args=(jid, target))
+            t = threading.Thread(target=self._run_dossier, args=(jid, target, url or None))
             t.daemon = True
             t.start()
             self._send_json({"job_id": jid, "status": "running", "target": target})
@@ -385,7 +385,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             jobs[jid]["error"] = str(e)[:500]
 
 
-    def _run_dossier(self, jid, target):
+    def _run_dossier(self, jid, target, source_url=None):
         """Generate complete identity dossier — simplified for Render"""
         try:
             sys.path.insert(0, str(SRC_DIR / "modules"))
@@ -393,6 +393,20 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             from advanced_osint import extract_photos_from_profile, extract_personal_info
             
             jobs[jid]["status_message"] = "Phase 1: Scanning social media + 700+ sites..."
+
+            # Phase 0: confirmed trace from a pasted URL (INSTAGRAM etc.)
+            # The user pasted a real profile link -> treat it as a HARD-CONFIRMED
+            # trace (clickable, lowers anonymity score). This is reliable evidence
+            # even when server-side scraping is blocked by anti-bot.
+            confirmed_sites = []
+            if source_url:
+                confirmed_sites.append({
+                    "site": "Pasted Profile",
+                    "url": source_url,
+                    "category": "Confirmed source",
+                    "confirmed": True,
+                })
+                jobs[jid]["confirmed_trace"] = source_url
 
             # Phase 1: Scrape main platforms (fast)
             platforms = ["twitter", "instagram", "github", "reddit", "tiktok"]
@@ -412,29 +426,34 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                 whatsmyname = _load_ghost_module("whatsmyname")
                 wmn_results = whatsmyname.check_whatsmyname(target, max_sites=100)
                 additional_sites = [
-                    {"site": r.get("name", "?"), "url": r.get("url", ""), "category": r.get("category", "")}
+                    {"site": r.get("name", "?"), "url": r.get("url", ""),
+                     "category": r.get("category", ""),
+                     "confirmed": bool(r.get("exists"))}
                     for r in wmn_results if r.get("exists")
                 ]
                 jobs[jid]["wmn_found"] = len(additional_sites)
             except Exception as e:
                 jobs[jid]["wmn_error"] = str(e)[:200]
             
+            # Merge confirmed pasted trace (always shown, real link)
+            all_found = additional_sites + confirmed_sites
+
             jobs[jid]["status_message"] = f"Phase 2: Extracting photos & personal info..."
-            
+
             # Phase 2: Extract photos and personal info (no external APIs)
             all_photos = []
             all_text = ""
-            
+
             for profile in profiles:
                 platform = profile.get("platform", "").lower()
-                
+
                 # Extract photos
                 try:
                     photos = extract_photos_from_profile(platform, target)
                     all_photos.extend(photos)
                 except:
                     pass
-                
+
                 # Collect text for personal info extraction
                 for key in ["bio", "recent_tweets", "recent_comments", "recent_captions"]:
                     val = profile.get(key)
@@ -447,23 +466,23 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
                                     all_text += " " + item
                         elif isinstance(val, str):
                             all_text += " " + val
-            
+
             # Extract personal info from collected text
             personal_info = extract_personal_info(all_text)
-            
+
             # Build advanced data structure
             advanced = {
                 "photos": all_photos,
                 "personal_info": personal_info,
-                "google_dorks": {"findings": self._generate_dorks(target, profiles)},
+                "google_dorks": {"findings": self._generate_dorks(target, profiles, source_url)},
                 "wayback": {"snapshots": []},
             }
-            
+
             jobs[jid]["status_message"] = "Phase 3: Generating dossier..."
-            
-            # Generate HTML dossier
-            html = generate_dossier(target, profiles, advanced, additional_sites)
-            
+
+            # Generate HTML dossier (pass all_found so confirmed + real WMN traces show)
+            html = generate_dossier(target, profiles, advanced, all_found, source_url=source_url)
+
             # Store HTML in memory (Render has no persistent storage)
             jobs[jid]["status"] = "completed"
             jobs[jid]["html_content"] = html
@@ -475,7 +494,7 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             jobs[jid]["status"] = "failed"
             jobs[jid]["error"] = str(e)[:500]
     
-    def _generate_dorks(self, target, profiles):
+    def _generate_dorks(self, target, profiles, source_url=None):
         """Generate Google Dork search URLs"""
         dorks = []
         
@@ -493,6 +512,11 @@ class GhostAPIHandler(BaseHTTPRequestHandler):
             f'"{target}" site:facebook.com',
             f'"{target}" site:instagram.com',
         ]
+
+        # Confirmed source link -> direct dork on that exact profile + mentions
+        if source_url:
+            dork_queries.append(f'"{target}" (site:{source_url})')
+            dork_queries.append(f'"{target}" "@{target}" OR "{target}"')
         
         for name in names:
             dork_queries.append(f'"{name}" email')

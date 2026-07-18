@@ -63,22 +63,14 @@ def check_whatsmyname(username: str, categories: list = None, max_sites: int = N
 
             try:
                 r = client.get(uri)
-
-                # Determine if profile exists
-                exists = False
-                e_string = site.get("e_string", "")
-                m_string = site.get("m_string", "")
-
-                if e_string and e_string in r.text:
-                    exists = True
-                elif m_string and m_string not in r.text:
-                    exists = True
+                exists, reason = determine_existence(r, site)
 
                 results.append({
                     "name": site.get("name"),
                     "category": site.get("cat"),
                     "url": uri,
                     "exists": exists,
+                    "reason": reason,
                     "status_code": r.status_code,
                 })
 
@@ -94,3 +86,67 @@ def check_whatsmyname(username: str, categories: list = None, max_sites: int = N
             time.sleep(0.15)
 
     return results
+
+
+def determine_existence(resp, site: dict) -> tuple[bool, str]:
+    """
+    WhatsMyName canonical existence test (fixes false positives).
+
+    Each WMN site defines:
+      e_code / e_string  -> when BOTH match, the profile EXISTS
+      m_code / m_string  -> when BOTH match, the profile DOES NOT exist
+    We require the status_code to match before trusting the string. A 200
+    response that is really a Cloudflare/JS challenge or generic error page
+    will NOT contain the e_string -> correctly reported as not found.
+
+    Returns (exists: bool, reason: str).
+    """
+    e_code = site.get("e_code")
+    e_string = (site.get("e_string") or "").strip()
+    m_code = site.get("m_code")
+    m_string = (site.get("m_string") or "").strip()
+
+    text = resp.text or ""
+
+    # 1) Missing-profile signal (m_code + m_string) wins -> not found.
+    if m_string:
+        code_ok = (m_code is None) or (resp.status_code == m_code)
+        if code_ok and m_string in text:
+            return False, f"m_string match (status {resp.status_code})"
+
+    # 2) Existence signal (e_code + e_string): the e_string is the strong,
+    #    profile-specific signal. A hard "not found" HTTP code (4xx except 415)
+    #    overrides it; but a 415/4xx caused by request headers must not mask a
+    #    real profile, so when e_string is present we trust it.
+    HARD_NOTFOUND = {404, 403, 410, 400, 401, 429}
+    if e_string:
+        if resp.status_code in HARD_NOTFOUND:
+            return False, f"hard {resp.status_code} + no safe override"
+        if e_string in text:
+            return True, f"e_string match (status {resp.status_code})"
+
+    # 3) Status-only heuristics (sites without strings, or partial defs).
+    if e_code is not None and m_code is not None:
+        # Both codes defined: presence needs explicit signal above.
+        if resp.status_code == m_code and not e_string:
+            return False, f"m_code match (status {resp.status_code})"
+        if resp.status_code == e_code and not m_string:
+            return True, f"e_code match (status {resp.status_code})"
+    elif e_code is not None:
+        if resp.status_code == e_code:
+            return True, f"e_code match (status {resp.status_code})"
+    elif m_code is not None:
+        if resp.status_code == m_code:
+            return False, f"m_code match (status {resp.status_code})"
+
+    # 4) Hard-block responses => not found (anti-bot / challenge pages).
+    lower = text.lower()[:4000]
+    block_hits = ("just a moment", "checking your browser", "enable javascript",
+                  "cloudflare", "captcha", "are you a human",
+                  "access denied", "request blocked", "rate limited",
+                  "you are being rate limited")
+    if any(b in lower for b in block_hits):
+        return False, f"anti-bot/block page (status {resp.status_code})"
+
+    # 5) Fallback: nothing conclusive -> treat as not found (safe side).
+    return False, f"no signal (status {resp.status_code})"
