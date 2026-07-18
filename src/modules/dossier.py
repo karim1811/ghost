@@ -751,67 +751,61 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
     if n_dorks: anonymity_score -= 5
     anonymity_score = max(0, anonymity_score)
     
-    # Generer le dossier HTML
-    html = f"""<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GHOST Dossier — {username}</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Segoe UI', sans-serif; background: #0a0a0f; color: #e0e0e0; line-height: 1.6; }}
-        .container {{ max-width: 1000px; margin: 0 auto; padding: 20px; }}
-        
-        .header {{ text-align: center; padding: 40px 0; border-bottom: 2px solid #ff4b4b; margin-bottom: 30px; }}
-        .header h1 {{ color: #ff4b4b; font-size: 2.5rem; }}
-        .header .subtitle {{ color: #888; margin-top: 10px; }}
-        
-        .anonymity-score {{ 
-            display: inline-block; padding: 15px 30px; border-radius: 10px; 
+    # Generer le dossier HTML (FRAGMENT: pas de <html>/<head>/<body>,
+    # injecte via innerHTML dans index.html qui fournit le fond + .profile-link)
+    html = f"""<style>
+        .ghost-dossier {{ max-width: 1000px; margin: 0 auto; }}
+        .ghost-dossier * {{ box-sizing: border-box; }}
+        .ghost-dossier a {{ color: #58a6ff; text-decoration: none; }}
+        .ghost-dossier a:hover {{ text-decoration: underline; }}
+        .ghost-dossier .header {{ text-align: center; padding: 40px 0; border-bottom: 2px solid #ff4b4b; margin-bottom: 30px; }}
+        .ghost-dossier .header h1 {{ color: #ff4b4b; font-size: 2.5rem; }}
+        .ghost-dossier .header .subtitle {{ color: #888; margin-top: 10px; }}
+        .ghost-dossier .anonymity-score {{
+            display: inline-block; padding: 15px 30px; border-radius: 10px;
             font-size: 1.2rem; font-weight: bold; margin-top: 20px;
         }}
-        .score-low {{ background: #ff4b4b33; color: #ff4b4b; border: 2px solid #ff4b4b; }}
-        .score-medium {{ background: #ffaa0033; color: #ffaa00; border: 2px solid #ffaa00; }}
-        .score-high {{ background: #00ff8833; color: #00ff88; border: 2px solid #00ff88; }}
-        
-        .section {{ background: #12121a; border: 1px solid #2a2a3a; border-radius: 10px; padding: 25px; margin-bottom: 20px; }}
-        .section h2 {{ color: #ff4b4b; margin-bottom: 15px; font-size: 1.3rem; }}
-        .section h3 {{ color: #ff8888; margin: 15px 0 10px 0; font-size: 1.1rem; }}
-        
-        .info-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }}
-        .info-item {{ background: #1a1a25; padding: 15px; border-radius: 8px; border-left: 3px solid #ff4b4b; }}
-        .info-item .label {{ color: #888; font-size: 0.85rem; text-transform: uppercase; }}
-        .info-item .value {{ color: #fff; font-size: 1rem; margin-top: 5px; }}
-        
-        a {{ color: #58a6ff; text-decoration: none; }}
-        a:hover {{ text-decoration: underline; }}
-        
-        .quote {{ 
-            background: #1a1a25; padding: 15px; border-radius: 8px; margin: 10px 0; 
+        .ghost-dossier .score-low {{ background: #ff4b4b33; color: #ff4b4b; border: 2px solid #ff4b4b; }}
+        .ghost-dossier .score-medium {{ background: #ffaa0033; color: #ffaa00; border: 2px solid #ffaa00; }}
+        .ghost-dossier .score-high {{ background: #00ff8833; color: #00ff88; border: 2px solid #00ff88; }}
+        .ghost-dossier .section {{ background: #12121a; border: 1px solid #2a2a3a; border-radius: 10px; padding: 25px; margin-bottom: 20px; }}
+        .ghost-dossier .section h2 {{ color: #ff4b4b; margin-bottom: 15px; font-size: 1.3rem; }}
+        .ghost-dossier .section h3 {{ color: #ff8888; margin: 15px 0 10px 0; font-size: 1.1rem; }}
+        .ghost-dossier .info-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }}
+        .ghost-dossier .info-item {{ background: #1a1a25; padding: 15px; border-radius: 8px; border-left: 3px solid #ff4b4b; }}
+        .ghost-dossier .info-item .label {{ color: #888; font-size: 0.85rem; text-transform: uppercase; }}
+        .ghost-dossier .info-item .value {{ color: #fff; font-size: 1rem; margin-top: 5px; }}
+        .ghost-dossier .quote {{
+            background: #1a1a25; padding: 15px; border-radius: 8px; margin: 10px 0;
             border-left: 3px solid #58a6ff; font-style: italic;
         }}
-        .quote .source {{ color: #888; font-size: 0.8rem; margin-top: 5px; font-style: normal; }}
-        
-        .platform-section {{ margin-bottom: 20px; }}
-        .platform-header {{ 
-            background: #1a1a25; padding: 12px 20px; border-radius: 8px 8px 0 0; 
+        .ghost-dossier .quote .source {{ color: #888; font-size: 0.8rem; margin-top: 5px; font-style: normal; }}
+        .ghost-dossier .platform-section {{ margin-bottom: 20px; }}
+        .ghost-dossier .platform-header {{
+            background: #1a1a25; padding: 12px 20px; border-radius: 8px 8px 0 0;
             border-bottom: 2px solid #ff4b4b; font-weight: bold;
         }}
-        .platform-content {{ background: #0f0f18; padding: 20px; border-radius: 0 0 8px 8px; }}
-        
-        .verdict {{ 
+        .ghost-dossier .platform-content {{ background: #0f0f18; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .ghost-dossier .verdict {{
             text-align: center; padding: 30px; border-radius: 10px; margin-top: 30px;
             background: {"#ff4b4b22" if anonymity_score < 40 else "#ffaa0022" if anonymity_score < 70 else "#00ff8822"};
             border: 2px solid {"#ff4b4b" if anonymity_score < 40 else "#ffaa00" if anonymity_score < 70 else "#00ff88"};
         }}
-        .verdict h2 {{ color: {"#ff4b4b" if anonymity_score < 40 else "#ffaa00" if anonymity_score < 70 else "#00ff88"}; font-size: 1.5rem; }}
-        
-        .footer {{ text-align: center; padding: 30px; color: #555; font-size: 0.85rem; margin-top: 40px; }}
+        .ghost-dossier .verdict h2 {{ color: {"#ff4b4b" if anonymity_score < 40 else "#ffaa00" if anonymity_score < 70 else "#00ff88"}; font-size: 1.5rem; }}
+        .ghost-dossier .footer {{ text-align: center; padding: 30px; color: #555; font-size: 0.85rem; margin-top: 40px; }}
+        /* profile-link: required for the WMN/dorks lists (was only in index.html) */
+        .ghost-dossier .profile-link {{ display: flex; align-items: center; gap: 10px; padding: 12px 15px; background: #1a1a25; border-radius: 8px; margin-bottom: 8px; text-decoration: none; color: #58a6ff; border: 1px solid #2a2a3a; transition: all 0.2s; }}
+        .ghost-dossier .profile-link:hover {{ border-color: #ff4b4b; background: #1a1a30; }}
+        .ghost-dossier .profile-link .platform {{ font-weight: bold; min-width: 100px; }}
+        .ghost-dossier .profile-link .url {{ color: #888; font-size: 0.85rem; word-break: break-all; }}
+        .ghost-dossier .photo-gallery {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }}
+        .ghost-dossier .photo-item {{ position: relative; border-radius: 8px; overflow: hidden; border: 2px solid #2a2a3a; cursor: pointer; transition: all 0.2s; }}
+        .ghost-dossier .photo-item:hover {{ border-color: #ff4b4b; transform: scale(1.02); }}
+        .ghost-dossier .photo-item img {{ width: 100%; height: 150px; object-fit: cover; }}
+        .ghost-dossier .photo-item .platform {{ position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.8); padding: 5px; font-size: 0.7rem; text-align: center; }}
+        .ghost-dossier .photo-item .download {{ position: absolute; top: 5px; right: 5px; background: #ff4b4b; color: white; border: none; border-radius: 4px; padding: 3px 6px; font-size: 0.7rem; cursor: pointer; }}
     </style>
-</head>
-<body>
-    <div class="container">
+    <div class="ghost-dossier">
         <div class="header">
             <h1>👻 GHOST Identity Dossier</h1>
             <p class="subtitle">Target: <strong>@{username}</strong> | Generated: {datetime.now().strftime("%Y-%m-%d %H:%M")}</p>
@@ -1172,7 +1166,6 @@ def generate_dossier(username: str, profiles: list, advanced: dict = None, addit
             <p style="margin-top:5px;">This report contains only publicly available information.</p>
         </div>
     </div>
-</body>
-</html>"""
+"""
     
     return html
